@@ -1,7 +1,7 @@
 <template>
   <img alt="Vue logo" src="./assets/logo.png" />
   <div>122</div>
-  <liHelloWorld msg="Hello 傲夫靠斯" />
+  <li-hello-world msg="Hello 傲夫靠斯" />
   <li-button>点我-傲夫靠斯</li-button>
 </template>
 
