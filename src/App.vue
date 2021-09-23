@@ -1,17 +1,16 @@
 <template>
   <img alt="Vue logo" src="./assets/logo.png" />
-  <HelloWorld msg="Welcome to Your Vue.js + TypeScript App" />
+  <div>122</div>
+  <liHelloWorld msg="Hello 傲夫靠斯" />
+  <li-button>点我-傲夫靠斯</li-button>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import HelloWorld from "./components/HelloWorld.vue";
 
 export default defineComponent({
   name: "App",
-  components: {
-    HelloWorld,
-  },
+  components: {},
 });
 </script>
 
