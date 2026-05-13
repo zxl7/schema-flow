@@ -55,4 +55,27 @@ export default defineComponent({
 
 ## 下一步
 
-第一版故意不接真实 URL 接口，`dict_translate` 和 `tree/user` 先走本地 mock options，便于学习组件边界。后续可以新增 `optionProvider` 属性，把字典、URL 约束、用户、组织树这些数据源交给业务方注入。
+当前组件已经预留 `optionProvider` 属性，把字典、URL 约束、用户、组织树这些数据源交给业务方注入。
+
+```vue
+<li-business-form
+  :fields="demoFields"
+  :option-provider="loadOptions"
+/>
+```
+
+```ts
+async function loadOptions(field, formModel) {
+  if (field.optionSource === 'url') {
+    console.log(field.urlConstraint, formModel)
+  }
+
+  return field.options
+}
+```
+
+真实业务下一步可以继续补：
+
+- 根据 `field.urlConstraint` 请求远程选项
+- 根据 `field.translateKey` 处理提交和回显翻译字段
+- 根据 `field.constraints` 扩展联动、显隐、组合约束

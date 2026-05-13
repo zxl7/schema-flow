@@ -6,6 +6,7 @@ import type {
   FormMode,
   RawBusinessField,
   RawConstraint,
+  UrlConstraint,
 } from './types'
 
 const stateKeyMap: Record<FormMode, 'createState' | 'editState' | 'viewState'> = {
@@ -29,6 +30,18 @@ const mockDictionaries: Record<string, FieldOption[]> = {
     { label: '专检', value: 'special' },
     { label: '巡检', value: 'patrol' },
   ],
+  QualificationType: [
+    { label: '焊接', value: 'welding' },
+    { label: '装配', value: 'assembly' },
+  ],
+  specialMarking: [
+    { label: '普通', value: 'normal' },
+    { label: '特殊', value: 'special' },
+  ],
+  handoverType: [
+    { label: '顺序交接', value: 'sequence' },
+    { label: '并行交接', value: 'parallel' },
+  ],
 }
 
 export function parseConstraints(constraintInfo?: string | null): Record<string, RawConstraint> {
@@ -46,6 +59,35 @@ export function parseConstraints(constraintInfo?: string | null): Record<string,
     console.warn('constraintInfo 解析失败：', constraintInfo, error)
     return {}
   }
+}
+
+export function parseUrlConstraint(value?: string | number | boolean): UrlConstraint | undefined {
+  if (!value || typeof value !== 'string') return undefined
+
+  const [left = '', right = ''] = value.split(' / ')
+  const [url = '', paramsText = ''] = left.split('?')
+  const [valueKey, labelKey] = right.split('&').map((item) => item.trim()).filter(Boolean)
+  const params = paramsText
+    .split('&')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  return {
+    raw: value,
+    url: url.trim(),
+    params,
+    valueKey,
+    labelKey,
+  }
+}
+
+function getOptionSource(field: RawBusinessField, constraints: Record<string, RawConstraint>): BusinessField['optionSource'] {
+  if (constraints.enum) return 'enum'
+  if (constraints.dict_translate) return 'dict'
+  if (constraints.url) return 'url'
+  if (field.controlStyle === 'tree' || field.controlStyle === 'user') return 'mock'
+  if (field.controlStyle === 'inputAndSelect' || field.controlStyle === 'searchInput') return 'mock'
+  return 'none'
 }
 
 // 把 enum、dict_translate、tree、user 等不同来源先统一成 options。
@@ -117,22 +159,43 @@ function getPlaceholder(field: RawBusinessField, constraints: Record<string, Raw
   return `请输入${field.displayName}`
 }
 
+function getValueType(field: RawBusinessField): BusinessField['valueType'] {
+  if (field.controlStyle === 'double' || field.dataType === 'Double') return 'number'
+  if (field.controlStyle === 'checkbox') return 'boolean'
+  if (field.controlStyle === 'date' || field.dataType === 'Date') return 'date'
+  if (field.controlStyle === 'select' || field.controlStyle === 'tree' || field.controlStyle === 'user') return 'string'
+  if (field.controlStyle === 'textInput' || field.controlStyle === 'text' || field.controlStyle === 'editor') return 'string'
+  return 'unknown'
+}
+
+function getFieldWidth(field: RawBusinessField): string {
+  if (field.widthProportion) return field.widthProportion
+  if (field.controlStyle === 'text' || field.controlStyle === 'editor') return '100%'
+  return '50%'
+}
+
 // 单个字段归一化：把原始配置转换成模板可直接消费的数据。
 export function normalizeField(field: RawBusinessField, mode: FormMode): BusinessField {
   const constraints = parseConstraints(field.constraintInfo)
   const stateKey = stateKeyMap[mode]
   const state = field[stateKey]
   const disabled = mode === 'view' || state === 'R' || constraints.auto_code?.value === 1
+  const defaultValue = getDefaultValue(field, constraints)
 
   return {
     ...field,
     constraints,
     options: buildOptions(field, constraints),
+    optionSource: getOptionSource(field, constraints),
+    urlConstraint: parseUrlConstraint(constraints.url?.value),
+    translateKey: constraints.translate?.value ? String(constraints.translate.value) : undefined,
+    defaultValue,
     hidden: state === 'hidden',
     disabled,
     required: constraints.required?.value === 1,
     placeholder: getPlaceholder(field, constraints),
-    formWidth: field.widthProportion || (field.controlStyle === 'text' || field.controlStyle === 'editor' ? '100%' : '50%'),
+    formWidth: getFieldWidth(field),
+    valueType: getValueType(field),
   }
 }
 
@@ -163,8 +226,19 @@ export function groupFields(fields: RawBusinessField[], mode: FormMode): Busines
 export function createInitialModel(groups: BusinessFieldGroup[]): Record<string, FieldValue> {
   return groups.reduce<Record<string, FieldValue>>((model, group) => {
     group.fields.forEach((field) => {
-      model[field.attributeNum] = getDefaultValue(field, field.constraints)
+      model[field.attributeNum] = field.defaultValue
     })
     return model
+  }, {})
+}
+
+export function createSubmitValues(groups: BusinessFieldGroup[], formModel: Record<string, FieldValue>, includeHidden = false): Record<string, FieldValue> {
+  return groups.reduce<Record<string, FieldValue>>((values, group) => {
+    group.fields.forEach((field) => {
+      if (!includeHidden && field.hidden) return
+
+      values[field.attributeNum] = formModel[field.attributeNum] ?? null
+    })
+    return values
   }, {})
 }

@@ -29,6 +29,15 @@ export interface FieldOption {
   children?: FieldOption[]
 }
 
+// URL 约束拆解后的结构，后续真实业务可以用它请求接口。
+export interface UrlConstraint {
+  raw: string
+  url: string
+  params: string[]
+  valueKey?: string
+  labelKey?: string
+}
+
 // 后端或配置平台直接下发的原始字段结构。
 export interface RawBusinessField {
   bid: string
@@ -50,11 +59,16 @@ export interface RawBusinessField {
 export interface BusinessField extends RawBusinessField {
   constraints: Record<string, RawConstraint>
   options: FieldOption[]
+  optionSource: 'none' | 'enum' | 'dict' | 'url' | 'mock'
+  urlConstraint?: UrlConstraint
+  translateKey?: string
+  defaultValue: FieldValue
   hidden: boolean
   disabled: boolean
   required: boolean
   placeholder: string
   formWidth: string
+  valueType: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'unknown'
 }
 
 export interface BusinessFieldGroup {
@@ -65,3 +79,5 @@ export interface BusinessFieldGroup {
 export type FieldValue = string | number | boolean | null | Array<string | number>
 
 export type FormModel = Record<string, FieldValue>
+
+export type OptionProvider = (field: BusinessField, formModel: FormModel) => FieldOption[] | Promise<FieldOption[]>

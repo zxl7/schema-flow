@@ -35,8 +35,9 @@
               :disabled="field.disabled"
               :placeholder="field.placeholder"
               allow-clear
+              :loading="loadingMap[field.attributeNum]"
             >
-              <a-select-option v-for="option in field.options" :key="option.value" :value="option.value">
+              <a-select-option v-for="option in getFieldOptions(field)" :key="option.value" :value="option.value">
                 {{ option.label }}
               </a-select-option>
             </a-select>
@@ -48,8 +49,9 @@
               :placeholder="field.placeholder"
               allow-clear
               show-search
+              :loading="loadingMap[field.attributeNum]"
             >
-              <a-select-option v-for="option in field.options" :key="option.value" :value="option.value">
+              <a-select-option v-for="option in getFieldOptions(field)" :key="option.value" :value="option.value">
                 {{ option.label }}
               </a-select-option>
             </a-select>
@@ -59,8 +61,8 @@
               v-model:value="formModel[field.attributeNum]"
               :disabled="field.disabled"
               :placeholder="field.placeholder"
-              :tree-data="field.options"
-              :replace-fields="{ title: 'label', value: 'value', children: 'children' }"
+              :tree-data="getFieldOptions(field)"
+              :field-names="{ label: 'label', value: 'value', children: 'children' }"
               allow-clear
               tree-default-expand-all
             />
@@ -111,8 +113,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { BusinessFieldGroup, FormMode, FormModel, RawBusinessField } from './types'
-import { createInitialModel, groupFields } from './utils'
+import type { BusinessField, BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
+import { createInitialModel, createSubmitValues, groupFields } from './utils'
 
 type FormRule = {
   required?: boolean
@@ -120,15 +122,22 @@ type FormRule = {
   trigger?: string
 }
 
+defineOptions({
+  name: 'LiBusinessForm',
+})
+
 const props = withDefaults(
   defineProps<{
     title?: string
     fields: RawBusinessField[]
     mode?: FormMode
+    includeHiddenValues?: boolean
+    optionProvider?: OptionProvider
   }>(),
   {
     title: '动态业务表单',
     mode: 'create',
+    includeHiddenValues: false,
   }
 )
 
@@ -142,6 +151,10 @@ const formRef = ref()
 
 // formModel 是真正和所有控件 v-model 绑定的响应式表单数据。
 const formModel = reactive<FormModel>({})
+
+// 动态选项缓存：真实业务里字典、URL、人员、组织树都可以走这里。
+const optionMap = reactive<Record<string, FieldOption[]>>({})
+const loadingMap = reactive<Record<string, boolean>>({})
 
 // 第一步：把原始 demo.json 字段转换成“组件更容易渲染”的分组字段。
 const groups = computed(() => groupFields(props.fields, props.mode))
@@ -189,7 +202,7 @@ function fillForm(groupsValue: BusinessFieldGroup[]): void {
 }
 
 function getValues(): FormModel {
-  return { ...formModel }
+  return createSubmitValues(groups.value, formModel, props.includeHiddenValues)
 }
 
 function resetForm(): void {
@@ -204,10 +217,36 @@ async function submitForm(): Promise<void> {
   emit('submit', getValues())
 }
 
+function getFieldOptions(field: BusinessField): FieldOption[] {
+  return optionMap[field.attributeNum] || field.options
+}
+
+async function loadFieldOptions(field: BusinessField): Promise<void> {
+  if (!props.optionProvider || field.optionSource === 'none') {
+    optionMap[field.attributeNum] = field.options
+    return
+  }
+
+  loadingMap[field.attributeNum] = true
+
+  try {
+    optionMap[field.attributeNum] = await props.optionProvider(field, formModel)
+  } finally {
+    loadingMap[field.attributeNum] = false
+  }
+}
+
+async function loadAllOptions(groupsValue: BusinessFieldGroup[]): Promise<void> {
+  const fields = groupsValue.flatMap((group) => group.fields)
+
+  await Promise.all(fields.map((field) => loadFieldOptions(field)))
+}
+
 watch(
   groups,
   (nextGroups) => {
     fillForm(nextGroups)
+    loadAllOptions(nextGroups)
   },
   { immediate: true }
 )

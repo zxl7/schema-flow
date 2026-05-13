@@ -4,6 +4,7 @@
       title="工序基础信息"
       :fields="demoFields"
       mode="create"
+      :option-provider="optionProvider"
       @submit="handleSubmit"
       @change="handleChange"
     />
@@ -18,12 +19,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import demoFields from '../demo.json'
+import LiBusinessForm from './components/li-business-form/index.vue'
+import type { BusinessField, FieldOption, FormModel } from './components/li-business-form/types'
 
 // 演示页只负责传入 demo.json，并接收业务表单抛出的数据。
 const currentValues = ref<Record<string, unknown>>({})
 
 // 把对象格式化成 JSON 字符串，方便初学者观察表单数据如何变化。
 const previewValues = computed(() => JSON.stringify(currentValues.value, null, 2))
+
+// 这里模拟复杂业务的数据源入口：真实项目可以在这里调用字典、URL、组织树等接口。
+async function optionProvider(field: BusinessField, formModel: FormModel): Promise<FieldOption[]> {
+  console.log('加载字段选项：', field.attributeNum, field.optionSource, field.urlConstraint, formModel)
+
+  return field.options
+}
 
 function handleChange(values: Record<string, unknown>): void {
   currentValues.value = values
