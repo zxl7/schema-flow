@@ -1,5 +1,7 @@
 <template>
+  <!-- 主业务表单组件：负责布局、分组、校验和提交逻辑 -->
   <div class="li-business-form">
+    <!-- 1. 头部操作区 -->
     <div class="li-business-form__header">
       <div>
         <p class="li-business-form__eyebrow">基础业务组件</p>
@@ -11,6 +13,7 @@
       </a-space>
     </div>
 
+    <!-- 2. 动态表单内容 -->
     <a-form ref="formRef" class="li-business-form__form" layout="vertical" :model="formModel" :rules="rules">
       <section v-for="group in visibleGroups" :key="group.name" class="li-business-form__group">
         <h3>{{ group.name }}</h3>
@@ -22,87 +25,13 @@
             :name="field.attributeNum"
             :class="{ 'is-full': field.formWidth === '100%' }"
           >
-            <a-input
-              v-if="field.controlStyle === 'textInput'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-            />
-
-            <a-select
-              v-else-if="field.controlStyle === 'select'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              allow-clear
-              :loading="loadingMap[field.attributeNum]"
-            >
-              <a-select-option v-for="option in getFieldOptions(field)" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </a-select-option>
-            </a-select>
-
-            <a-select
-              v-else-if="field.controlStyle === 'inputAndSelect' || field.controlStyle === 'searchInput' || field.controlStyle === 'user'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              allow-clear
-              show-search
-              :loading="loadingMap[field.attributeNum]"
-            >
-              <a-select-option v-for="option in getFieldOptions(field)" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </a-select-option>
-            </a-select>
-
-            <a-tree-select
-              v-else-if="field.controlStyle === 'tree'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              :tree-data="getFieldOptions(field)"
-              :field-names="{ label: 'label', value: 'value', children: 'children' }"
-              allow-clear
-              tree-default-expand-all
-            />
-
-            <a-input-number
-              v-else-if="field.controlStyle === 'double'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              class="li-business-form__number"
-            />
-
-            <a-textarea
-              v-else-if="field.controlStyle === 'text' || field.controlStyle === 'editor'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              :rows="field.controlStyle === 'editor' ? 6 : 3"
-            />
-
-            <a-date-picker
-              v-else-if="field.controlStyle === 'date'"
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              class="li-business-form__date"
-            />
-
-            <a-switch
-              v-else-if="field.controlStyle === 'checkbox'"
-              v-model:checked="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-            />
-
-            <a-input
-              v-else
-              v-model:value="formModel[field.attributeNum]"
-              :disabled="field.disabled"
-              :placeholder="field.placeholder"
+            <!-- 使用分发器组件处理具体的字段渲染 -->
+            <BusinessField
+              v-model:model-value="formModel[field.attributeNum]"
+              :field="field"
+              :mode="mode"
+              :form-model="formModel"
+              :option-provider="optionProvider"
             />
           </a-form-item>
         </div>
@@ -113,9 +42,11 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { BusinessField, BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
+import type { BusinessFieldGroup, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
 import { createInitialModel, createSubmitValues, groupFields } from './utils'
+import BusinessField from './BusinessField.vue'
 
+// 内部使用的校验规则类型
 type FormRule = {
   required?: boolean
   message?: string
@@ -126,11 +57,15 @@ defineOptions({
   name: 'LiBusinessForm',
 })
 
+/**
+ * 组件属性定义
+ */
 const props = withDefaults(
   defineProps<{
     title?: string
     fields: RawBusinessField[]
     mode?: FormMode
+    initialValues?: FormModel
     includeHiddenValues?: boolean
     optionProvider?: OptionProvider
   }>(),
@@ -138,28 +73,32 @@ const props = withDefaults(
     title: '动态业务表单',
     mode: 'create',
     includeHiddenValues: false,
+    initialValues: () => ({}),
   }
 )
 
+/**
+ * 事件定义
+ */
 const emit = defineEmits<{
   (event: 'submit', values: FormModel): void
   (event: 'change', values: FormModel): void
 }>()
 
-// 保存 Ant Design Vue 表单实例，用于提交前主动触发表单校验。
+// 表单引用
 const formRef = ref()
 
-// formModel 是真正和所有控件 v-model 绑定的响应式表单数据。
+// 响应式表单数据
 const formModel = reactive<FormModel>({})
 
-// 动态选项缓存：真实业务里字典、URL、人员、组织树都可以走这里。
-const optionMap = reactive<Record<string, FieldOption[]>>({})
-const loadingMap = reactive<Record<string, boolean>>({})
-
-// 第一步：把原始 demo.json 字段转换成“组件更容易渲染”的分组字段。
+/**
+ * 计算字段分组数据
+ */
 const groups = computed(() => groupFields(props.fields, props.mode))
 
-// 第二步：模板只渲染未隐藏字段，隐藏逻辑集中在数据层处理。
+/**
+ * 过滤掉隐藏的字段和空分组
+ */
 const visibleGroups = computed(() =>
   groups.value
     .map((group) => ({
@@ -169,7 +108,9 @@ const visibleGroups = computed(() =>
     .filter((group) => group.fields.length > 0)
 )
 
-// 第三步：根据 required 约束生成 Ant Design Vue 表单规则。
+/**
+ * 动态生成 Ant Design 表单校验规则
+ */
 const rules = computed<Record<string, FormRule[]>>(() => {
   const result: Record<string, FormRule[]> = {}
 
@@ -190,68 +131,67 @@ const rules = computed<Record<string, FormRule[]>>(() => {
   return result
 })
 
+/**
+ * 填充表单初始值
+ */
 function fillForm(groupsValue: BusinessFieldGroup[]): void {
+  // 清空当前 model
   Object.keys(formModel).forEach((key) => {
     delete formModel[key]
   })
 
-  const nextModel = createInitialModel(groupsValue)
-  Object.keys(nextModel).forEach((key) => {
-    formModel[key] = nextModel[key]
+  // 1. 先根据字段配置生成基础初始值（兜底）
+  const baseModel = createInitialModel(groupsValue)
+  
+  // 2. 混合外部传入的初始值（如果有）
+  const finalModel = {
+    ...baseModel,
+    ...props.initialValues
+  }
+
+  Object.keys(finalModel).forEach((key) => {
+    formModel[key] = finalModel[key]
   })
 }
 
+/**
+ * 获取提交时的数据
+ */
 function getValues(): FormModel {
   return createSubmitValues(groups.value, formModel, props.includeHiddenValues)
 }
 
+/**
+ * 重置表单
+ */
 function resetForm(): void {
   fillForm(groups.value)
 }
 
+/**
+ * 提交表单
+ */
 async function submitForm(): Promise<void> {
   if (formRef.value) {
-    await formRef.value.validate()
-  }
-
-  emit('submit', getValues())
-}
-
-function getFieldOptions(field: BusinessField): FieldOption[] {
-  return optionMap[field.attributeNum] || field.options
-}
-
-async function loadFieldOptions(field: BusinessField): Promise<void> {
-  if (!props.optionProvider || field.optionSource === 'none') {
-    optionMap[field.attributeNum] = field.options
-    return
-  }
-
-  loadingMap[field.attributeNum] = true
-
-  try {
-    optionMap[field.attributeNum] = await props.optionProvider(field, formModel)
-  } finally {
-    loadingMap[field.attributeNum] = false
+    try {
+      await formRef.value.validate()
+      emit('submit', getValues())
+    } catch (error) {
+      console.warn('表单校验未通过:', error)
+    }
   }
 }
 
-async function loadAllOptions(groupsValue: BusinessFieldGroup[]): Promise<void> {
-  const fields = groupsValue.flatMap((group) => group.fields)
-
-  await Promise.all(fields.map((field) => loadFieldOptions(field)))
-}
-
+// 监听字段配置或初始值变化，重新初始化表单
 watch(
-  groups,
-  (nextGroups) => {
+  [groups, () => props.initialValues],
+  ([nextGroups]) => {
     fillForm(nextGroups)
-    loadAllOptions(nextGroups)
   },
-  { immediate: true }
+  { immediate: true, deep: true }
 )
 
-// 每次表单变化都把当前值抛给父组件，方便做右侧 JSON 预览或外部联动。
+// 监听表单数据变化，向外抛出 change 事件
 watch(
   formModel,
   () => {
@@ -260,6 +200,7 @@ watch(
   { deep: true }
 )
 
+// 暴露给外部的方法
 defineExpose({
   getValues,
   resetForm,
@@ -279,71 +220,59 @@ defineExpose({
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .li-business-form__eyebrow {
   margin: 0 0 4px;
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.li-business-form__header h2,
-.li-business-form__group h3 {
-  margin: 0;
-  color: #111827;
+  font-size: 12px;
   font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.li-business-form__form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.li-business-form__header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .li-business-form__group {
-  padding: 20px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  margin-bottom: 32px;
 }
 
 .li-business-form__group h3 {
+  padding-bottom: 8px;
   margin-bottom: 16px;
   font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .li-business-form__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  column-gap: 20px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0 24px;
 }
 
-.li-business-form__grid :deep(.ant-form-item) {
-  margin-bottom: 16px;
+.li-business-form__grid .ant-form-item {
+  margin-bottom: 20px;
 }
 
 .li-business-form__grid .is-full {
-  grid-column: 1 / -1;
+  grid-column: span 2;
 }
 
-.li-business-form__number,
-.li-business-form__date {
-  width: 100%;
-}
-
-@media (max-width: 720px) {
-  .li-business-form {
-    padding: 16px;
-  }
-
-  .li-business-form__header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
+@media (max-width: 640px) {
   .li-business-form__grid {
     grid-template-columns: 1fr;
+  }
+
+  .li-business-form__grid .is-full {
+    grid-column: span 1;
   }
 }
 </style>

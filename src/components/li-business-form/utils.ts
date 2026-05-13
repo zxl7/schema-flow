@@ -1,3 +1,4 @@
+// import type 是一种优化写法，告诉编译器这些导入仅用于类型检查，在最终编译出的 JS 中会被完全移除。
 import type {
   BusinessField,
   BusinessFieldGroup,
@@ -9,13 +10,14 @@ import type {
   UrlConstraint,
 } from './types'
 
+// 这里的 Record<FormMode, ...> 确保了 stateKeyMap 必须包含 FormMode 中定义的所有 key（create, edit, view）。
 const stateKeyMap: Record<FormMode, 'createState' | 'editState' | 'viewState'> = {
   create: 'createState',
   edit: 'editState',
   view: 'viewState',
 }
 
-// 第一版先用本地 mock 字典，让组件学习重点放在“动态渲染”本身。
+// 定义一个键为 string，值为 FieldOption 数组的对象。
 const mockDictionaries: Record<string, FieldOption[]> = {
   boolDictionary: [
     { label: '是', value: '1' },
@@ -44,11 +46,21 @@ const mockDictionaries: Record<string, FieldOption[]> = {
   ],
 }
 
+/**
+ * 解析约束字符串
+ * @param constraintInfo 可选参数，类型为 string 或 null
+ * @returns 返回一个对象，key 是字符串，value 是 RawConstraint 接口类型
+ */
 export function parseConstraints(constraintInfo?: string | null): Record<string, RawConstraint> {
   if (!constraintInfo) return {}
 
   try {
+    // as RawConstraint[] 叫做“类型断言 (Type Assertion)”。
+    // 因为 JSON.parse 返回的是 any 类型，我们明确告诉 TS 这里它就是一个 RawConstraint 数组。
     const list = JSON.parse(constraintInfo) as RawConstraint[]
+
+    // reduce 后面跟着 <Record<string, RawConstraint>> 是“泛型 (Generics)”。
+    // 它告诉 reduce 函数，最终累加的结果 result 应该是这个指定的 Record 类型。
     return list.reduce<Record<string, RawConstraint>>((result, item) => {
       if (item.key) {
         result[item.key] = item
@@ -61,9 +73,15 @@ export function parseConstraints(constraintInfo?: string | null): Record<string,
   }
 }
 
+/**
+ * 解析 URL 约束
+ * @returns 返回 UrlConstraint 结构或 undefined
+ */
 export function parseUrlConstraint(value?: string | number | boolean): UrlConstraint | undefined {
+  // typeof 是 JS 原生操作符，但在 TS 中它也能帮助编译器缩小变量的类型范围。
   if (!value || typeof value !== 'string') return undefined
 
+  // 解构赋值，并带有默认值（如果 split 结果不足两个，则 left 或 right 为空字符串）。
   const [left = '', right = ''] = value.split(' / ')
   const [url = '', paramsText = ''] = left.split('?')
   const [valueKey, labelKey] = right.split('&').map((item) => item.trim()).filter(Boolean)
@@ -81,6 +99,8 @@ export function parseUrlConstraint(value?: string | number | boolean): UrlConstr
   }
 }
 
+// BusinessField['optionSource'] 这种语法叫“索引访问类型 (Indexed Access Types)”。
+// 它直接获取 BusinessField 接口中 optionSource 属性的类型。
 function getOptionSource(field: RawBusinessField, constraints: Record<string, RawConstraint>): BusinessField['optionSource'] {
   if (constraints.enum) return 'enum'
   if (constraints.dict_translate) return 'dict'
