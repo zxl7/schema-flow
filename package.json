@@ -1,60 +1,41 @@
 {
   "name": "srx-ui",
   "version": "0.1.4",
+  "type": "module",
   "private": false,
   "repository": "https://github.com/zxl7/components",
-  "main": "dist/index.common.js",
+  "main": "dist/srx-ui.umd.cjs",
+  "module": "dist/srx-ui.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/srx-ui.js",
+      "require": "./dist/srx-ui.umd.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
   "bugs": "https://github.com/zxl7/components/issues",
   "files": [
-    "dist/index.common.js",
-    "dist/index.umd.min.js",
-    "dist/index.css"
+    "dist"
   ],
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build --target lib --name index src/components/index.js",
-    "lint": "vue-cli-service lint"
+    "dev": "vite",
+    "serve": "vite",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:lib": "vue-tsc --declaration --emitDeclarationOnly --outDir dist/types && vite build --config vite.lib.config.ts",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@byzanteam/slp-fields": "^0.3.16",
-    "srx-ui": "^0.1.3",
-    "vue": "^3.0.0"
+    "@ant-design/icons-vue": "^7.0.1",
+    "ant-design-vue": "^4.2.6",
+    "vue": "^3.5.21"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^4.18.0",
-    "@typescript-eslint/parser": "^4.18.0",
-    "@vue/cli-plugin-eslint": "~4.5.0",
-    "@vue/cli-plugin-typescript": "~4.5.0",
-    "@vue/cli-service": "~4.5.0",
-    "@vue/compiler-sfc": "^3.0.0",
-    "@vue/eslint-config-prettier": "^6.0.0",
-    "@vue/eslint-config-typescript": "^7.0.0",
-    "eslint": "^6.7.2",
-    "eslint-plugin-prettier": "^3.3.1",
-    "eslint-plugin-vue": "^7.0.0",
-    "prettier": "^2.2.1",
-    "sass": "^1.26.5",
-    "sass-loader": "^8.0.2",
-    "typescript": "~4.1.5"
-  },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended",
-      "@vue/typescript/recommended"
-    ],
-    "parserOptions": {
-      "ecmaVersion": 2020
-    },
-    "rules": {}
-  },
-  "browserslist": [
-    "> 1%",
-    "last 2 versions",
-    "not dead"
-  ]
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "^5.8.3",
+    "vite": "^8.0.0",
+    "vue-tsc": "^3.1.5"
+  }
 }

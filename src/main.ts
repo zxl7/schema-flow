@@ -1,8 +1,8 @@
 import { createApp } from 'vue'
+import Antd from 'ant-design-vue'
+import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 
-// import likeUI from './components/index.js'
-import likeUI from 'srx-ui'
-import 'srx-ui/dist/index.css'
+import likeUI from './components'
 
-createApp(App).use(likeUI).mount('#app')
+createApp(App).use(Antd).use(likeUI).mount('#app')
