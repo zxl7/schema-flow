@@ -63,12 +63,12 @@ const previewValues = computed(() => JSON.stringify(currentValues.value, null, 2
 
 // 这里模拟复杂业务的数据源入口：真实项目可以在这里调用字典、URL、组织树等接口。
 async function optionProvider(field: BusinessField, formModel: FormModel): Promise<FieldOption[]> {
-  console.log('加载字段选项：', field.attributeNum, field.optionSource, field.urlConstraint, formModel)
+  console.log('加载字段选项：', field.attributeNum, field.logic.optionSource, field.logic.urlConstraint, formModel)
   
   // 模拟网络延迟
   await new Promise(resolve => setTimeout(resolve, 300))
 
-  return field.options
+  return field.props.options
 }
 
 function handleChange(values: Record<string, unknown>): void {

@@ -1,8 +1,11 @@
 <template>
-  <!-- 浏览态展示组件：负责将 ID 或 Code 转换成人类可读的文字 -->
-  <div class="field-view-text">
+  <!-- 
+    【UI 组件：浏览态专用】
+    它的任务只有一个：把枯燥的数据（如 "1", "zs"）转换成好看的文字（如 "是", "张三"）。
+  -->
+  <div class="field-view">
     <template v-if="isEmpty">
-      <span class="is-empty">-</span>
+      <span class="empty-placeholder">-</span>
     </template>
     <template v-else>
       {{ displayValue }}
@@ -19,55 +22,52 @@ const props = defineProps<{
   modelValue: FieldValue
 }>()
 
-// 判断值是否为空
 const isEmpty = computed(() => {
   return props.modelValue === null || props.modelValue === undefined || props.modelValue === ''
 })
 
 /**
- * 计算展示文本
- * 如果是下拉/树形，尝试从 options 中寻找对应的 label
+ * 核心逻辑：自动翻译
+ * 它会遍历数据引擎准备好的 props.options，寻找匹配的 Label。
  */
 const displayValue = computed(() => {
   if (isEmpty.value) return '-'
 
-  // 处理布尔值
+  // 1. 处理特殊的布尔开关
   if (props.field.controlStyle === 'checkbox') {
     return props.modelValue ? '是' : '否'
   }
 
-  // 如果有选项列表，尝试进行“翻译”
-  if (props.field.options && props.field.options.length > 0) {
-    const findLabel = (opts: FieldOption[], val: any): string | null => {
-      for (const opt of opts) {
-        if (opt.value === val) return opt.label
-        if (opt.children) {
-          const childLabel = findLabel(opt.children, val)
-          if (childLabel) return childLabel
+  // 2. 处理带有字典/枚举的字段
+  const options = props.field.props.options
+  if (options && options.length > 0) {
+    const findInTree = (list: FieldOption[], val: any): string | null => {
+      for (const item of list) {
+        if (item.value === val) return item.label
+        if (item.children) {
+          const found = findInTree(item.children, val)
+          if (found) return found
         }
       }
       return null
     }
-
-    const label = findLabel(props.field.options, props.modelValue)
-    if (label) return label
+    // 自动寻找对应的 Label
+    return findInTree(options, props.modelValue) || String(props.modelValue)
   }
 
-  // 默认原样输出
+  // 3. 普通文本直接输出
   return String(props.modelValue)
 })
 </script>
 
 <style scoped>
-.field-view-text {
+.field-view {
   min-height: 32px;
   padding: 4px 0;
   font-size: 14px;
-  line-height: 1.5;
-  color: #333;
+  color: #262626;
 }
-
-.is-empty {
+.empty-placeholder {
   color: #bfbfbf;
 }
 </style>

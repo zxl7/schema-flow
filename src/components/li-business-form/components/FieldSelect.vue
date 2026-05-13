@@ -1,26 +1,23 @@
 <template>
-  <!-- 下拉选择组件，处理 select, inputAndSelect, searchInput, user 等控件样式 -->
+  <!-- 
+    【UI 组件：下拉/选人类】
+    支持动态加载数据。
+  -->
   <a-select
+    v-bind="$attrs"
     :value="modelValue"
     @update:value="onUpdate"
-    :disabled="field.disabled"
-    :placeholder="field.placeholder"
-    :options="options"
+    :options="currentOptions"
     :loading="loading"
-    :show-search="isSearchable"
-    :allow-clear="true"
-    class="field-select"
     @focus="handleFocus"
-  >
-    <!-- 如果有特殊展示需求，可以在这里自定义 label -->
-  </a-select>
+    class="w-full"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { BusinessField, FieldOption, FieldValue, FormModel, OptionProvider } from '../types'
 
-// 定义 Props 泛型接口
 const props = defineProps<{
   field: BusinessField
   modelValue: FieldValue
@@ -32,67 +29,58 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: FieldValue): void
 }>()
 
-// 本地选项状态
+// 本地维护一个选项列表，用于存储异步加载回来的数据
 const localOptions = ref<FieldOption[]>([])
 const loading = ref(false)
 const hasLoaded = ref(false)
 
-// 计算最终使用的选项：优先使用异步加载的，其次使用字段配置自带的
-const options = computed(() => {
-  return localOptions.value.length > 0 ? localOptions.value : props.field.options
-})
-
-// 判断是否需要开启搜索功能
-const isSearchable = computed(() => {
-  const styles = ['inputAndSelect', 'searchInput', 'user']
-  return styles.includes(props.field.controlStyle)
+// 策略：如果异步加载了新选项，则显示新的；否则显示数据引擎预装载的静态选项。
+const currentOptions = computed(() => {
+  return localOptions.value.length > 0 ? localOptions.value : (props.field.props.options || [])
 })
 
 /**
- * 异步加载选项数据
- * 处理 URL 约束、字典翻译等业务逻辑
+ * 触发异步加载逻辑
  */
 async function loadOptions(): Promise<void> {
-  if (!props.optionProvider || props.field.optionSource === 'none') return
+  if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
   try {
-    // 调用外部传入的加载器（例如从接口获取数据）
-    localOptions.value = await props.optionProvider(props.field, props.formModel)
+    // 调用外部传入的 Provider（比如发起一个 API 请求）
+    const res = await props.optionProvider(props.field, props.formModel)
+    localOptions.value = res
     hasLoaded.value = true
   } catch (error) {
-    console.error(`加载字段 ${props.field.displayName} 选项失败:`, error)
+    console.error(`加载选项失败:`, error)
   } finally {
     loading.value = false
   }
 }
 
 /**
- * 聚焦时如果未加载过数据，则触发加载
+ * 聚焦加载：只有在用户点击下拉框时，才去触发接口拉取数据（按需加载）。
  */
 function handleFocus(): void {
-  if (!hasLoaded.value && props.field.optionSource !== 'none') {
+  if (!hasLoaded.value && props.field.logic.optionSource !== 'none') {
     loadOptions()
   }
 }
 
-/**
- * 值的更新回调
- */
 function onUpdate(val: any): void {
   emit('update:modelValue', val)
 }
 
-// 初始化时如果已经是 mock 数据源，可以提前加载
 onMounted(() => {
-  if (props.field.optionSource === 'mock') {
+  // 如果是 Mock 数据源，可以在初始化时就直接加载。
+  if (props.field.logic.optionSource === 'mock') {
     loadOptions()
   }
 })
 </script>
 
 <style scoped>
-.field-select {
+.w-full {
   width: 100%;
 }
 </style>

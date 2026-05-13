@@ -42,13 +42,13 @@ export interface UrlConstraint {
   labelKey?: string
 }
 
+// 后端下发的原始字段结构（保持不变，兼容 demo.json）。
 export interface RawBusinessField {
   bid: string
   attributeNum: string
   attributeType?: string
   dataType?: string
   displayName: string
-  // 也可以是 ControlStyle 类型，或者是任意字符串。
   controlStyle: ControlStyle | string
   sortOrder?: number
   constraintInfo?: string | null
@@ -59,23 +59,33 @@ export interface RawBusinessField {
   widthProportion?: string | null
 }
 
-// extends 表示“继承”，BusinessField 包含了 RawBusinessField 的所有属性，并增加了下面这些。
+// 归一化后的 UI 字段协议：组件只关注这里定义的属性。
 export interface BusinessField extends RawBusinessField {
-  // Record<K, T> 是一个“工具类型”，表示一个对象。
-  // 这里的 key 是 string 类型，value 是 RawConstraint 类型。
-  constraints: Record<string, RawConstraint>
-  options: FieldOption[]
-  optionSource: 'none' | 'enum' | 'dict' | 'url' | 'mock'
-  urlConstraint?: UrlConstraint
-  translateKey?: string
-  defaultValue: FieldValue
-  hidden: boolean
-  disabled: boolean
-  required: boolean
-  placeholder: string
-  formWidth: string
-  // 限制 valueType 只能是这几个特定的字符串。
-  valueType: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'unknown'
+  // 核心 UI 属性
+  uiType: 'input' | 'select' | 'tree' | 'view' // 该渲染哪种类型的组件
+  
+  // 统一的属性包，直接传给 AntD 或自定义控件
+  props: {
+    placeholder?: string
+    disabled: boolean
+    options: FieldOption[]
+    loading?: boolean
+    required: boolean
+    allowClear?: boolean
+    showSearch?: boolean
+    [key: string]: any // 允许扩展其他属性
+  }
+
+  // 业务逻辑包
+  logic: {
+    optionSource: 'none' | 'enum' | 'dict' | 'url' | 'mock'
+    urlConstraint?: UrlConstraint
+    translateKey?: string
+    defaultValue: FieldValue
+    hidden: boolean
+    formWidth: string
+    valueType: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'unknown'
+  }
 }
 
 export interface BusinessFieldGroup {

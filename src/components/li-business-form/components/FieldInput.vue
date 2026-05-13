@@ -1,84 +1,80 @@
 <template>
-  <!-- 基础输入组件，处理 textInput, double, text, editor 等控件样式 -->
-  <template v-if="field.controlStyle === 'double'">
-    <a-input-number
-      :value="modelValue"
-      @update:value="onUpdate"
-      :disabled="field.disabled"
-      :placeholder="field.placeholder"
-      class="field-input-number"
-    />
-  </template>
+  <div class="field-input">
+    <!-- 
+      【UI 组件：基础输入类】
+      所有的基础属性（disabled, placeholder）都通过 v-bind="$attrs" 自动透传。
+      这里不写逻辑判断，只负责根据 controlStyle 决定显示哪种 AntD 标签。
+    -->
+    <template v-if="field.controlStyle === 'double'">
+      <a-input-number
+        v-bind="$attrs"
+        :value="modelValue"
+        @update:value="onUpdate"
+        class="w-full"
+      />
+    </template>
 
-  <template v-else-if="field.controlStyle === 'text' || field.controlStyle === 'editor'">
-    <a-textarea
-      :value="modelValue"
-      @update:value="onUpdate"
-      :disabled="field.disabled"
-      :placeholder="field.placeholder"
-      :rows="field.controlStyle === 'editor' ? 6 : 3"
-    />
-  </template>
+    <template v-else-if="field.controlStyle === 'text' || field.controlStyle === 'editor'">
+      <a-textarea
+        v-bind="$attrs"
+        :value="modelValue"
+        @update:value="onUpdate"
+        :rows="field.controlStyle === 'editor' ? 6 : 3"
+      />
+    </template>
 
-  <template v-else-if="field.controlStyle === 'date'">
-    <a-date-picker
-      :value="modelValue"
-      @update:value="onUpdate"
-      :disabled="field.disabled"
-      :placeholder="field.placeholder"
-      value-format="YYYY-MM-DD HH:mm:ss"
-      class="field-date-picker"
-    />
-  </template>
+    <template v-else-if="field.controlStyle === 'date'">
+      <a-date-picker
+        v-bind="$attrs"
+        :value="modelValue"
+        @update:value="onUpdate"
+        value-format="YYYY-MM-DD HH:mm:ss"
+        class="w-full"
+      />
+    </template>
 
-  <template v-else-if="field.controlStyle === 'checkbox'">
-    <a-switch
-      :checked="!!modelValue"
-      @update:checked="onUpdate"
-      :disabled="field.disabled"
-    />
-  </template>
+    <template v-else-if="field.controlStyle === 'checkbox'">
+      <a-switch
+        v-bind="$attrs"
+        :checked="!!modelValue"
+        @update:checked="onUpdate"
+      />
+    </template>
 
-  <template v-else>
-    <a-input
-      :value="modelValue"
-      @update:value="onUpdate"
-      :disabled="field.disabled"
-      :placeholder="field.placeholder"
-    />
-  </template>
+    <template v-else>
+      <a-input
+        v-bind="$attrs"
+        :value="modelValue"
+        @update:value="onUpdate"
+      />
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
 import type { BusinessField, FieldValue } from '../types'
 
 /**
- * 定义组件属性
- * field: 归一化后的字段配置
- * modelValue: 表单值，使用 v-model 绑定
+ * 这是一个“笨组件”：
+ * 它不需要知道什么是业务逻辑，也不需要解析 constraintInfo。
+ * 它只需要接收父组件传来的“指令”（Props）并执行。
  */
-const props = defineProps<{
+defineProps<{
   field: BusinessField
   modelValue: FieldValue
 }>()
 
-// 定义事件，用于实现 v-model 双向绑定
 const emit = defineEmits<{
   (e: 'update:modelValue', value: FieldValue): void
 }>()
 
-/**
- * 统一处理值更新
- * @param val 更新后的值
- */
 function onUpdate(val: any): void {
   emit('update:modelValue', val)
 }
 </script>
 
 <style scoped>
-.field-input-number,
-.field-date-picker {
+.w-full {
   width: 100%;
 }
 </style>

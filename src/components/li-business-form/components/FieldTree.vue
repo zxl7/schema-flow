@@ -1,17 +1,13 @@
 <template>
-  <!-- 树形选择组件 -->
   <a-tree-select
+    v-bind="$attrs"
     :value="modelValue"
     @update:value="onUpdate"
-    :disabled="field.disabled"
-    :placeholder="field.placeholder"
-    :tree-data="options"
+    :tree-data="currentOptions"
     :loading="loading"
     :field-names="{ label: 'label', value: 'value', children: 'children' }"
-    allow-clear
-    tree-default-expand-all
-    class="field-tree-select"
     @focus="handleFocus"
+    class="w-full"
   />
 </template>
 
@@ -34,15 +30,12 @@ const localOptions = ref<FieldOption[]>([])
 const loading = ref(false)
 const hasLoaded = ref(false)
 
-const options = computed(() => {
-  return localOptions.value.length > 0 ? localOptions.value : props.field.options
+const currentOptions = computed(() => {
+  return localOptions.value.length > 0 ? localOptions.value : (props.field.props.options || [])
 })
 
-/**
- * 异步加载树形数据
- */
 async function loadOptions(): Promise<void> {
-  if (!props.optionProvider || props.field.optionSource === 'none') return
+  if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
   try {
@@ -64,14 +57,14 @@ function onUpdate(val: any): void {
 }
 
 onMounted(() => {
-  if (props.field.optionSource === 'mock') {
+  if (props.field.logic.optionSource === 'mock') {
     loadOptions()
   }
 })
 </script>
 
 <style scoped>
-.field-tree-select {
+.w-full {
   width: 100%;
 }
 </style>
