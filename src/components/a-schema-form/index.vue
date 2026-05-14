@@ -1,12 +1,12 @@
 <template>
-  <div class="li-business-form">
+  <div class="a-schema-form">
     <!-- 
       1. 头部插槽
       允许父组件自定义标题、操作按钮等。
       如果父组件不传，则默认不显示。
     -->
     <slot name="header" :title="title">
-      <div v-if="title" class="li-business-form__header">
+      <div v-if="title" class="a-schema-form__header">
         <h2>{{ title }}</h2>
       </div>
     </slot>
@@ -14,10 +14,10 @@
     <!-- 
       2. 动态表单容器
     -->
-    <a-form ref="formRef" class="li-business-form__form" layout="vertical" :model="formModel" :rules="rules">
-      <section v-for="group in visibleGroups" :key="group.name" class="li-business-form__group">
+    <a-form ref="formRef" class="a-schema-form__form" layout="vertical" :model="formModel" :rules="rules">
+      <section v-for="group in visibleGroups" :key="group.name" class="a-schema-form__group">
         <h3>{{ group.name }}</h3>
-        <div class="li-business-form__grid">
+        <div class="a-schema-form__grid">
           <a-form-item
             v-for="field in group.fields"
             :key="field.attributeNum"
@@ -54,7 +54,7 @@ import BusinessField from './BusinessField.vue'
 
 type FormRule = { required?: boolean; message?: string; trigger?: string }
 
-defineOptions({ name: 'LiBusinessForm' })
+defineOptions({ name: 'ASchemaForm' })
 
 const props = withDefaults(
   defineProps<{
@@ -158,38 +158,38 @@ defineExpose({ resetForm, submitForm })
 </script>
 
 <style scoped>
-.li-business-form {
+.a-schema-form {
   width: 100%;
   padding: 24px;
   background: #f7f9fb;
 }
-.li-business-form__header {
+.a-schema-form__header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 24px;
 }
-.li-business-form__header h2 {
+.a-schema-form__header h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 700;
 }
-.li-business-form__eyebrow {
+.a-schema-form__eyebrow {
   margin: 0;
   font-size: 12px;
   color: #6b7280;
   text-transform: uppercase;
 }
-.li-business-form__group {
+.a-schema-form__group {
   margin-bottom: 32px;
 }
-.li-business-form__group h3 {
+.a-schema-form__group h3 {
   padding-bottom: 8px;
   margin-bottom: 16px;
   font-size: 16px;
   font-weight: 600;
   border-bottom: 1px solid #e5e7eb;
 }
-.li-business-form__grid {
+.a-schema-form__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 24px;
@@ -198,7 +198,7 @@ defineExpose({ resetForm, submitForm })
   grid-column: span 2;
 }
 @media (max-width: 640px) {
-  .li-business-form__grid {
+  .a-schema-form__grid {
     grid-template-columns: 1fr;
   }
   .is-full {

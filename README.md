@@ -41,7 +41,7 @@ app.mount('#app')
 
 ## ✨ 核心组件
 
-### LiBusinessForm (动态业务表单)
+### ASchemaForm (动态业务表单)
 
 基于 JSON Schema 驱动的动态表单引擎，支持多种业务控件及复杂的约束逻辑。
 
@@ -50,5 +50,5 @@ app.mount('#app')
 - **解耦设计**：通过 `dictionaries` 和 `optionProvider` 将业务数据源剥离。
 - **灵活扩展**：提供 `#header` 和 `#footer` 插槽，支持高度自定义 UI。
 
-详细文档请参考：[LiBusinessForm README](file:///Users/zxl/Desktop/private/components-ui/src/components/li-business-form/README.md)
+详细文档请参考：[ASchemaForm README](file:///Users/zxl/Desktop/private/components-ui/src/components/a-schema-form/README.md)
 

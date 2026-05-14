@@ -1,8 +1,8 @@
 import type { App, Plugin } from 'vue'
-import LiBusinessForm from './li-business-form/index.vue'
+import ASchemaForm from './a-schema-form/index.vue'
 
 const components = [
-  { name: 'li-business-form', component: LiBusinessForm },
+  { name: 'a-schema-form', component: ASchemaForm },
 ]
 
 const SrxUi: Plugin = {
@@ -13,6 +13,6 @@ const SrxUi: Plugin = {
   },
 }
 
-export { LiBusinessForm }
+export { ASchemaForm }
 
 export default SrxUi

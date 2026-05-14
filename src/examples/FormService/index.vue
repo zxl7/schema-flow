@@ -11,7 +11,7 @@
       </section>
 
       <!-- 核心动态表单组件 -->
-      <li-business-form
+      <a-schema-form
         ref="formRef"
         :fields="demoFields"
         :mode="currentMode"
@@ -21,7 +21,7 @@
         @submit="onFormSubmit"
         @change="onFormChange"
       >
-        <!-- 使用 header 插槽自定义标题和按钮，将业务 UI 逻辑从组件库中剥离 -->
+        <!-- 使用 header 插槽自定义标题 and 按钮，将业务 UI 逻辑从组件库中剥离 -->
         <template #header>
           <div class="form-header">
             <div class="header-info">
@@ -34,7 +34,7 @@
             </a-space>
           </div>
         </template>
-      </li-business-form>
+      </a-schema-form>
     </div>
 
     <!-- 数据实时监控面板 -->
@@ -57,8 +57,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import demoFields from '../../../demo.json'
-import LiBusinessForm from '../../components/li-business-form/index.vue'
-import type { BusinessField, FieldOption, FormMode, FormModel } from '../../components/li-business-form/types'
+import ASchemaForm from '../../components/a-schema-form/index.vue'
+import type { BusinessField, FieldOption, FormMode, FormModel } from '../../components/a-schema-form/types'
 
 /**
  * 业务服务页面：负责调度动态表单组件，处理外部数据交互
