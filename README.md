@@ -1,46 +1,54 @@
-# srx-ui
+# Srx-UI 业务组件库
 
-适用于 **Vue3 + Vite + TypeScript**。
+一套基于 **Vue 3 + Ant Design Vue + TypeScript** 构建的轻量级业务组件库，采用**函数式编程**思想，实现业务与视图模型的解耦。
 
-## 本地开发
+## 🚀 快速开始
 
-```ts
+### 1. 安装依赖
+```bash
 npm install
+```
+
+### 2. 启动示例项目
+```bash
 npm run dev
 ```
 
-## 组件库构建
-
-```ts
+### 3. 组件库构建
+```bash
+# 构建生产环境库文件
 npm run build:lib
 ```
 
-## 使用组件库
+## 📦 项目结构
+
+- `src/components`: 核心组件库源码
+- `src/examples`: 组件使用示例（业务集成参考）
+- `src/router`: 示例项目路由配置
+
+## 🛠 使用组件库
+
+在项目中引入：
 
 ```ts
-import srxUI from 'srx-ui'
+import SrxUi from 'srx-ui'
 import 'srx-ui/style.css'
 
-createApp(App).use(srxUI).mount('#app')
-
+const app = createApp(App)
+app.use(SrxUi)
+app.mount('#app')
 ```
 
-## developedComponents
-- li-hello-world
-- li-button
-- li-business-form
+## ✨ 核心组件
 
-## li-business-form
+### LiBusinessForm (动态业务表单)
 
-`li-business-form` 是基于 Ant Design Vue 的动态业务表单组件。当前版本先支持 `demo.json` 这类 UME 属性元数据，适合作为基础业务组件库的学习入口。
+基于 JSON Schema 驱动的动态表单引擎，支持多种业务控件及复杂的约束逻辑。
 
-```vue
-<li-business-form
-  title="工序基础信息"
-  :fields="demoFields"
-  mode="create"
-  @submit="handleSubmit"
-/>
-```
+**核心特性：**
+- **数据驱动**：直接消费后端原始元数据。
+- **解耦设计**：通过 `dictionaries` 和 `optionProvider` 将业务数据源剥离。
+- **灵活扩展**：提供 `#header` 和 `#footer` 插槽，支持高度自定义 UI。
 
-更多说明见 `src/components/li-business-form/README.md`。
+详细文档请参考：[LiBusinessForm README](file:///Users/zxl/Desktop/private/components-ui/src/components/li-business-form/README.md)
+

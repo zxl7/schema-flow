@@ -1,28 +1,23 @@
 <template>
   <div class="li-business-form">
-    <!-- 1. 头部标题与全局操作 -->
-    <div class="li-business-form__header">
-      <div>
-        <p class="li-business-form__eyebrow">基础业务组件</p>
+    <!-- 
+      1. 头部插槽
+      允许父组件自定义标题、操作按钮等。
+      如果父组件不传，则默认不显示。
+    -->
+    <slot name="header" :title="title">
+      <div v-if="title" class="li-business-form__header">
         <h2>{{ title }}</h2>
       </div>
-      <a-space>
-        <a-button @click="resetForm">重置</a-button>
-        <a-button type="primary" @click="submitForm">提交</a-button>
-      </a-space>
-    </div>
+    </slot>
 
     <!-- 
       2. 动态表单容器
-      这里使用了 Ant Design Vue 的 Form 组件。
-      model 绑定了我们响应式的 formModel，rules 则是动态计算出来的。
     -->
     <a-form ref="formRef" class="li-business-form__form" layout="vertical" :model="formModel" :rules="rules">
-      <!-- 遍历业务分组（如：基本属性、扩展属性） -->
       <section v-for="group in visibleGroups" :key="group.name" class="li-business-form__group">
         <h3>{{ group.name }}</h3>
         <div class="li-business-form__grid">
-          <!-- 遍历组内字段 -->
           <a-form-item
             v-for="field in group.fields"
             :key="field.attributeNum"
@@ -30,10 +25,6 @@
             :name="field.attributeNum"
             :class="{ 'is-full': field.logic.formWidth === '100%' }"
           >
-            <!-- 
-              【核心分发】
-              将归一化后的 field 对象传给分发器，分发器决定渲染哪个具体组件。
-            -->
             <BusinessField
               v-model:model-value="formModel[field.attributeNum]"
               :field="field"
@@ -44,12 +35,15 @@
         </div>
       </section>
     </a-form>
+
+    <!-- 3. 底部插槽 -->
+    <slot name="footer" :submit="submitForm" :reset="resetForm"></slot>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { BusinessFieldGroup, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
+import type { BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
 import { createInitialModel, createSubmitValues, groupFields } from './utils'
 import BusinessField from './BusinessField.vue'
 
@@ -65,17 +59,19 @@ defineOptions({ name: 'LiBusinessForm' })
 const props = withDefaults(
   defineProps<{
     title?: string
-    fields: RawBusinessField[] // 接收 demo.json 的原始数组
-    mode?: FormMode           // 模式：create | edit | view
-    initialValues?: FormModel // 外部传入的回显数据
+    fields: RawBusinessField[] 
+    mode?: FormMode           
+    initialValues?: FormModel 
     includeHiddenValues?: boolean
     optionProvider?: OptionProvider
+    dictionaries?: Record<string, FieldOption[]> // 外部传入的字典数据
   }>(),
   {
-    title: '动态业务表单',
+    title: '',
     mode: 'create',
     includeHiddenValues: false,
     initialValues: () => ({}),
+    dictionaries: () => ({}),
   }
 )
 
@@ -84,21 +80,16 @@ const emit = defineEmits<{
   (event: 'change', values: FormModel): void
 }>()
 
-// 表单引用，用于触发表单校验方法
+// 表单引用
 const formRef = ref()
 
-// 核心状态：存放用户当前在界面上输入的所有值。
-// 使用 reactive 而不是多个 ref，是因为表单字段是动态的，我们需要一个键值对结构来统一管理。
+// 核心状态
 const formModel = reactive<FormModel>({})
 
 /**
  * 【数据计算流】
- * 通过 computed 监听原始 fields 的变化。
- * 核心逻辑：
- * 只要 demo.json、模式(mode) 发生改变，数据引擎(groupFields) 就会重新运行，
- * 产出一套全新的、适合当前模式渲染的 BusinessFieldGroup 数组。
  */
-const groups = computed(() => groupFields(props.fields, props.mode))
+const groups = computed(() => groupFields(props.fields, props.mode, props.dictionaries))
 
 // 过滤掉不可见分组
 const visibleGroups = computed(() => 
@@ -107,7 +98,6 @@ const visibleGroups = computed(() =>
 
 /**
  * 【动态校验规则】
- * 根据数据引擎计算出的 field.props.required，自动生成 AntD 需要的校验规则。
  */
 const rules = computed(() => {
   const result: Record<string, FormRule[]> = {}
@@ -122,20 +112,12 @@ const rules = computed(() => {
 })
 
 /**
- * 初始化表单数据：
- * 融合了字段默认值和外部传入的回显值。
+ * 初始化表单数据
  */
 function fillForm(groupsValue: BusinessFieldGroup[]): void {
-  // 1. 先清空旧数据
   Object.keys(formModel).forEach(key => delete formModel[key])
-  
-  // 2. 获取配置中的默认值
   const base = createInitialModel(groupsValue)
-  
-  // 3. 混合回显数据
   const final = { ...base, ...props.initialValues }
-  
-  // 4. 写入响应式对象
   Object.keys(final).forEach(key => (formModel[key] = final[key]))
 }
 
@@ -145,36 +127,34 @@ function resetForm(): void {
 
 /**
  * 提交逻辑：
- * 先执行表单校验，校验通过后再向外抛出数据。
+ * 暴露给外部调用，也可以在 footer 插槽中使用。
  */
-async function submitForm(): Promise<void> {
+async function submitForm(): Promise<FormModel | undefined> {
   if (formRef.value) {
     try {
       await formRef.value.validate()
-      // 调用工具函数，过滤掉不需要提交的字段（如隐藏字段）
-      emit('submit', createSubmitValues(groups.value, formModel, props.includeHiddenValues))
+      const values = createSubmitValues(groups.value, formModel, props.includeHiddenValues)
+      emit('submit', values)
+      return values
     } catch (e) {
-      console.warn('表单校验失败，请检查输入', e)
+      console.warn('表单校验失败', e)
+      throw e
     }
   }
 }
 
-// 深度监听配置(groups)或外部回显数据(initialValues)的变化。
-// 为什么需要监听 groups？因为模式(mode)切换时，字段的默认值可能会变。
-// 为什么需要监听 initialValues？因为业务系统通常是异步拉取详情数据的。
 watch(
   [groups, () => props.initialValues],
   ([nextGroups]) => fillForm(nextGroups),
   { immediate: true, deep: true }
 )
 
-// 实时向父组件抛出数据变化事件
 watch(formModel, () => {
   emit('change', createSubmitValues(groups.value, formModel, props.includeHiddenValues))
 }, { deep: true })
 
-// 暴露给父组件调用的方法（通过 ref 访问）
-defineExpose({ resetForm })
+// 暴露方法
+defineExpose({ resetForm, submitForm })
 </script>
 
 <style scoped>

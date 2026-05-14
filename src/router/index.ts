@@ -14,7 +14,7 @@ const routes: RouteRecordRaw[] = [
     path: '/form-service',
     name: 'FormService',
     // 路由懒加载：提升首屏加载性能
-    component: () => import('../views/FormService/index.vue'),
+    component: () => import('../examples/FormService/index.vue'),
     meta: {
       title: '动态表单业务服务'
     }

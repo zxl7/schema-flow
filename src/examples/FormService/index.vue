@@ -12,14 +12,29 @@
 
       <!-- 核心动态表单组件 -->
       <li-business-form
-        title="工序基础信息管理"
+        ref="formRef"
         :fields="demoFields"
         :mode="currentMode"
         :initial-values="mockInitialValues"
         :option-provider="handleOptionLoad"
+        :dictionaries="businessDictionaries"
         @submit="onFormSubmit"
         @change="onFormChange"
-      />
+      >
+        <!-- 使用 header 插槽自定义标题和按钮，将业务 UI 逻辑从组件库中剥离 -->
+        <template #header>
+          <div class="form-header">
+            <div class="header-info">
+              <p class="eyebrow">业务服务模块</p>
+              <h2>工序基础信息管理</h2>
+            </div>
+            <a-space>
+              <a-button @click="handleReset">重置</a-button>
+              <a-button type="primary" @click="handleSubmit">提交</a-button>
+            </a-space>
+          </div>
+        </template>
+      </li-business-form>
     </div>
 
     <!-- 数据实时监控面板 -->
@@ -48,6 +63,19 @@ import type { BusinessField, FieldOption, FormMode, FormModel } from '../../comp
 /**
  * 业务服务页面：负责调度动态表单组件，处理外部数据交互
  */
+
+const formRef = ref()
+
+// 1. 业务字典数据：从组件库 utils 中剥离到业务侧
+const businessDictionaries: Record<string, FieldOption[]> = {
+  boolDictionary: [{ label: '是', value: '1' }, { label: '否', value: '0' }],
+  isAuxiliary: [{ label: '是', value: '1' }, { label: '否', value: '0' }],
+  processCheckType: [
+    { label: '自检', value: 'self' },
+    { label: '专检', value: 'special' },
+    { label: '巡检', value: 'patrol' },
+  ],
+}
 
 // 当前表单交互模式
 const currentMode = ref<FormMode>('create')
@@ -110,11 +138,31 @@ function onFormChange(values: Record<string, any>): void {
 }
 
 /**
- * 处理表单最终提交
+ * 手动触发表单重置
+ */
+function handleReset() {
+  formRef.value?.resetForm()
+}
+
+/**
+ * 手动触发表单提交
+ */
+async function handleSubmit() {
+  try {
+    const values = await formRef.value?.submitForm()
+    if (values) {
+      console.info('[FormService] 业务表单提交成功:', values)
+    }
+  } catch (e) {
+    // 校验失败
+  }
+}
+
+/**
+ * 处理表单最终提交（由组件 emit）
  */
 function onFormSubmit(values: Record<string, any>): void {
   currentValues.value = values
-  console.info('[FormService] 业务表单提交成功:', values)
 }
 </script>
 
@@ -139,6 +187,27 @@ function onFormSubmit(values: Record<string, any>): void {
   background: #ffffff;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.header-info h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .data-inspector {
