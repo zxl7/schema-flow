@@ -55,7 +55,6 @@
 import type { BusinessField, FieldValue } from '../types'
 
 /**
- * 这是一个“笨组件”：
  * 它不需要知道什么是业务逻辑，也不需要解析 constraintInfo。
  * 它只需要接收父组件传来的“指令”（Props）并执行。
  */

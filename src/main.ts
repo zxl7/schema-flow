@@ -2,7 +2,13 @@ import { createApp } from 'vue'
 import Antd from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
-
+import router from './router'
 import likeUI from './components'
 
-createApp(App).use(Antd).use(likeUI).mount('#app')
+const app = createApp(App)
+
+app.use(Antd)
+app.use(router)
+app.use(likeUI)
+
+app.mount('#app')

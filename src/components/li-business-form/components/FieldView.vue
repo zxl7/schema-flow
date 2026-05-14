@@ -41,6 +41,10 @@ const displayValue = computed(() => {
   // 2. 处理带有字典/枚举的字段
   const options = props.field.props.options
   if (options && options.length > 0) {
+    /**
+     * 递归搜索：
+     * 因为选项可能是树形结构（如责任单位），所以需要递归遍历寻找匹配的 Value。
+     */
     const findInTree = (list: FieldOption[], val: any): string | null => {
       for (const item of list) {
         if (item.value === val) return item.label
@@ -51,7 +55,7 @@ const displayValue = computed(() => {
       }
       return null
     }
-    // 自动寻找对应的 Label
+    // 自动寻找对应的 Label（翻译 ID 为文字）
     return findInTree(options, props.modelValue) || String(props.modelValue)
   }
 

@@ -54,8 +54,8 @@ import { createInitialModel, createSubmitValues, groupFields } from './utils'
 import BusinessField from './BusinessField.vue'
 
 /**
- * 【组件架构：外壳】
- * 这个文件负责整体的布局、表单校验、以及与父组件的通信。
+ * 业务表单容器组件 (Business Form Container)
+ * 职责：负责表单生命周期管理、布局分发、状态同步及交互逻辑调度。
  */
 
 type FormRule = { required?: boolean; message?: string; trigger?: string }
@@ -87,13 +87,16 @@ const emit = defineEmits<{
 // 表单引用，用于触发表单校验方法
 const formRef = ref()
 
-// 核心状态：存放用户当前在界面上输入的所有值
+// 核心状态：存放用户当前在界面上输入的所有值。
+// 使用 reactive 而不是多个 ref，是因为表单字段是动态的，我们需要一个键值对结构来统一管理。
 const formModel = reactive<FormModel>({})
 
 /**
  * 【数据计算流】
  * 通过 computed 监听原始 fields 的变化。
- * 只要 demo.json 或模式改变，数据引擎就会重新运行，生成全新的渲染分组。
+ * 核心逻辑：
+ * 只要 demo.json、模式(mode) 发生改变，数据引擎(groupFields) 就会重新运行，
+ * 产出一套全新的、适合当前模式渲染的 BusinessFieldGroup 数组。
  */
 const groups = computed(() => groupFields(props.fields, props.mode))
 
@@ -156,7 +159,9 @@ async function submitForm(): Promise<void> {
   }
 }
 
-// 深度监听配置变化：一旦 demo.json 或初始值变了，就重置表单。
+// 深度监听配置(groups)或外部回显数据(initialValues)的变化。
+// 为什么需要监听 groups？因为模式(mode)切换时，字段的默认值可能会变。
+// 为什么需要监听 initialValues？因为业务系统通常是异步拉取详情数据的。
 watch(
   [groups, () => props.initialValues],
   ([nextGroups]) => fillForm(nextGroups),

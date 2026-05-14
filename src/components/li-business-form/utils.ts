@@ -10,9 +10,9 @@ import type {
 } from './types'
 
 /**
- * 【数据层：大脑】
- * 这个文件是整个组件的核心，体现了“逻辑与 UI 分离”的原则。
- * 它像一个数据引擎（Data Engine），把后端给的原始、杂乱的 JSON 转换成前端 UI 能够直接识别的标准对象。
+ * 数据引擎层 (Data Engine Layer)
+ * 核心原则：领域模型与视图模型解耦 (Domain-View Decoupling)
+ * 职责：将后端原始领域数据 (RawBusinessField) 转换为 UI 驱动的视图模型 (BusinessField)。
  */
 
 // 状态映射表：将当前的表单模式（新增/编辑/预览）映射到 JSON 中对应的状态字段名。
@@ -35,13 +35,16 @@ const mockDictionaries: Record<string, FieldOption[]> = {
 
 /**
  * 【处理阶段 1：约束解析】
- * 将字符串格式的 JSON 约束（如 "[{"key":"required","value":1}]"）转换成对象格式，方便后续读取。
+ * 将字符串格式的 JSON 约束（如 "[{"key":"required","value":1}]"）转换成对象格式。
+ * 为什么这样做？
+ * 1. 原始数据是数组，查找某个约束需要遍历，效率低。
+ * 2. 转换成 Map 结构后，可以通过 constraints.required 直接访问，代码更简洁。
  */
 function parseConstraints(raw: string | null | undefined): Record<string, RawConstraint> {
   if (!raw) return {}
   try {
     const list = JSON.parse(raw) as RawConstraint[]
-    // 转换成 { required: { key: 'required', value: 1 } } 这种 key-value 结构，方便直接判断。
+    // 使用 reduce 将数组聚合为一个对象，key 是约束的名称（如 'required'）。
     return list.reduce((acc, item) => ({ ...acc, [item.key]: item }), {})
   } catch {
     return {}
@@ -69,7 +72,11 @@ function parseUrlConstraint(value: any): UrlConstraint | undefined {
 /**
  * 【核心处理：数据归一化 (Normalization)】
  * 这是一个“纯函数”，它把 RawBusinessField 变成 BusinessField。
- * 它的目标是：让 UI 组件拿到结果后，直接通过 v-bind="field.props" 就能渲染，不需要再写任何 if/else。
+ * 
+ * 核心设计思路：
+ * 后端下发的原始数据（Raw）通常包含很多业务术语和杂乱的嵌套。
+ * 我们在这里通过一个“归一化”过程，将 Raw 数据映射成 UI 组件需要的“标准语言”。
+ * 这样，UI 组件（如 Input, Select）就变成了“无状态”的、只负责渲染的“笨组件”。
  */
 export function normalizeField(raw: RawBusinessField, mode: FormMode): BusinessField {
   // 1. 获取该模式下的基础数据
