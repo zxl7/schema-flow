@@ -298,7 +298,7 @@ watch([urlPath, urlValueKey, urlLabelKey], () => {
   }
 })
 
-function updateConstraint(key: string, value: any) {
+const updateConstraint = (key: string, value: any) => {
   if (!selectedField.value) return
   
   let constraints: RawConstraint[] = []
@@ -327,7 +327,7 @@ function updateConstraint(key: string, value: any) {
 }
 
 // 5. 方法
-function addComponent(type: string) {
+const addComponent = (type: string) => {
   const newField: RawBusinessField = {
     bid: Date.now().toString(),
     attributeNum: `field_${fields.value.length + 1}`,
@@ -344,7 +344,7 @@ function addComponent(type: string) {
   selectedIndex.value = fields.value.length - 1
 }
 
-function removeComponent(index: number) {
+const removeComponent = (index: number) => {
   fields.value.splice(index, 1)
   if (selectedIndex.value === index) {
     selectedIndex.value = -1
@@ -353,7 +353,7 @@ function removeComponent(index: number) {
   }
 }
 
-function exportJson() {
+const exportJson = () => {
   showExportModal.value = true
 }
 </script>

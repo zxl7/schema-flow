@@ -26,7 +26,7 @@ const stateKeyMap: Record<FormMode, 'createState' | 'editState' | 'viewState'> =
  * 【处理阶段 1：约束解析】
  * 将字符串格式的 JSON 约束（如 "[{"key":"required","value":1}]"）转换成对象格式。
  */
-function parseConstraints(raw: string | null | undefined): Record<string, RawConstraint> {
+const parseConstraints = (raw: string | null | undefined): Record<string, RawConstraint> => {
   if (!raw) return {}
   try {
     const list = JSON.parse(raw) as RawConstraint[]
@@ -40,7 +40,7 @@ function parseConstraints(raw: string | null | undefined): Record<string, RawCon
  * 【处理阶段 2：URL 约束解析】
  * 专门解析特殊的 URL 字符串，拆解出请求地址、参数名、Label 字段名等。
  */
-function parseUrlConstraint(value: any): UrlConstraint | undefined {
+const parseUrlConstraint = (value: any): UrlConstraint | undefined => {
   if (typeof value !== 'string' || !value.includes('/')) return undefined
   const [urlPart, keyPart] = value.split(' / ')
   const [url, params] = urlPart.split('?')
@@ -63,11 +63,11 @@ function parseUrlConstraint(value: any): UrlConstraint | undefined {
  * @param dictionaries - 外部传入的字典库
  * @returns 归一化后的视图模型
  */
-export function normalizeField(
+export const normalizeField = (
   raw: RawBusinessField, 
   mode: FormMode, 
   dictionaries: Record<string, FieldOption[]> = {}
-): BusinessField {
+): BusinessField => {
   // 1. 获取该模式下的基础数据
   const constraints = parseConstraints(raw.constraintInfo)
   const state = raw[stateKeyMap[mode]]
@@ -127,11 +127,11 @@ export function normalizeField(
  * @param constraints - 已解析的约束 Map
  * @param dictionaries - 外部字典数据源
  */
-function buildDefaultOptions(
+const buildDefaultOptions = (
   raw: RawBusinessField, 
   constraints: Record<string, RawConstraint>,
   dictionaries: Record<string, FieldOption[]>
-): FieldOption[] {
+): FieldOption[] => {
   if (constraints.enum?.value) {
     return String(constraints.enum.value).split('||').map(v => ({ label: v, value: v }))
   }
@@ -158,11 +158,11 @@ function buildDefaultOptions(
  * @param mode - 模式
  * @param dictionaries - 字典库
  */
-export function groupFields(
+export const groupFields = (
   fields: RawBusinessField[], 
   mode: FormMode,
   dictionaries: Record<string, FieldOption[]> = {}
-): BusinessFieldGroup[] {
+): BusinessFieldGroup[] => {
   const groups: Record<string, BusinessField[]> = {}
   
   fields.forEach(f => {
@@ -184,7 +184,7 @@ export function groupFields(
  * 【表单 Model 初始化】
  * 根据字段配置，快速生成一个符合响应式的表单数据对象。
  */
-export function createInitialModel(groups: BusinessFieldGroup[]): Record<string, any> {
+export const createInitialModel = (groups: BusinessFieldGroup[]): Record<string, any> => {
   const model: Record<string, any> = {}
   groups.forEach(g => g.fields.forEach(f => {
     model[f.attributeNum] = f.logic.defaultValue
@@ -196,7 +196,7 @@ export function createInitialModel(groups: BusinessFieldGroup[]): Record<string,
  * 【结果提取】
  * 提交时调用，根据是否包含隐藏字段的需求，从响应式 Model 中提取出最终要发给后端的键值对。
  */
-export function createSubmitValues(groups: BusinessFieldGroup[], model: Record<string, any>, includeHidden = false): Record<string, any> {
+export const createSubmitValues = (groups: BusinessFieldGroup[], model: Record<string, any>, includeHidden = false): Record<string, any> => {
   const result: Record<string, any> = {}
   groups.forEach(g => g.fields.forEach(f => {
     if (!includeHidden && f.logic.hidden) return

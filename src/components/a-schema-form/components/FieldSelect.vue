@@ -42,7 +42,7 @@ const currentOptions = computed(() => {
 /**
  * 触发异步加载逻辑
  */
-async function loadOptions(): Promise<void> {
+const loadOptions = async (): Promise<void> => {
   if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
@@ -61,13 +61,13 @@ async function loadOptions(): Promise<void> {
 /**
  * 聚焦加载：只有在用户点击下拉框时，才去触发接口拉取数据（按需加载）。
  */
-function handleFocus(): void {
+const handleFocus = (): void => {
   if (!hasLoaded.value && props.field.logic.optionSource !== 'none') {
     loadOptions()
   }
 }
 
-function onUpdate(val: any): void {
+const onUpdate = (val: any): void => {
   emit('update:modelValue', val)
 }
 

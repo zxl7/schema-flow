@@ -58,7 +58,7 @@ const emit = defineEmits<{
  * 统一的值更新回调：
  * 子组件修改了值，通过这里向上抛给父组件的 reactive 状态。
  */
-function onUpdate(val: FieldValue): void {
+const onUpdate = (val: FieldValue): void => {
   emit('update:modelValue', val)
 }
 </script>

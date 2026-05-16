@@ -18,7 +18,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: FieldValue): void
 }>()
 
-function onUpdate(val: any) {
+const onUpdate = (val: any) => {
   emit('update:modelValue', val)
 }
 </script>

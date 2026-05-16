@@ -114,14 +114,14 @@ const rules = computed(() => {
 /**
  * 初始化表单数据
  */
-function fillForm(groupsValue: BusinessFieldGroup[]): void {
+const fillForm = (groupsValue: BusinessFieldGroup[]): void => {
   Object.keys(formModel).forEach(key => delete formModel[key])
   const base = createInitialModel(groupsValue)
   const final = { ...base, ...props.initialValues }
   Object.keys(final).forEach(key => (formModel[key] = final[key]))
 }
 
-function resetForm(): void {
+const resetForm = (): void => {
   fillForm(groups.value)
 }
 
@@ -129,7 +129,7 @@ function resetForm(): void {
  * 提交逻辑：
  * 暴露给外部调用，也可以在 footer 插槽中使用。
  */
-async function submitForm(): Promise<FormModel | undefined> {
+const submitForm = async (): Promise<FormModel | undefined> => {
   if (formRef.value) {
     try {
       await formRef.value.validate()

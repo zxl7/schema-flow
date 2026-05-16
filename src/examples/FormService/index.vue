@@ -119,7 +119,7 @@ const formattedValues = computed(() => JSON.stringify(currentValues.value, null,
  * 外部选项加载器
  * 处理带有 URL 约束或远程数据源的字段
  */
-async function handleOptionLoad(field: BusinessField, formModel: FormModel): Promise<FieldOption[]> {
+const handleOptionLoad = async (field: BusinessField, formModel: FormModel): Promise<FieldOption[]> => {
   console.info(`[FormService] 触发远程数据加载: ${field.attributeNum}`, { 
     source: field.logic.optionSource,
     model: formModel 
@@ -134,21 +134,21 @@ async function handleOptionLoad(field: BusinessField, formModel: FormModel): Pro
 /**
  * 处理表单数值变更
  */
-function onFormChange(values: Record<string, any>): void {
+const onFormChange = (values: Record<string, any>): void => {
   currentValues.value = values
 }
 
 /**
  * 手动触发表单重置
  */
-function handleReset() {
+const handleReset = () => {
   formRef.value?.resetForm()
 }
 
 /**
  * 手动触发表单提交
  */
-async function handleSubmit() {
+const handleSubmit = async () => {
   try {
     const values = await formRef.value?.submitForm()
     if (values) {
@@ -162,7 +162,7 @@ async function handleSubmit() {
 /**
  * 处理表单最终提交（由组件 emit）
  */
-function onFormSubmit(values: Record<string, any>): void {
+const onFormSubmit = (values: Record<string, any>): void => {
   currentValues.value = values
 }
 </script>

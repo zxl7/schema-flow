@@ -36,7 +36,7 @@ const currentOptions = computed(() => {
   return localOptions.value.length > 0 ? localOptions.value : (props.field.props.options || [])
 })
 
-async function loadOptions(): Promise<void> {
+const loadOptions = async (): Promise<void> => {
   if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
@@ -50,7 +50,7 @@ async function loadOptions(): Promise<void> {
   }
 }
 
-function onUpdate(val: any): void {
+const onUpdate = (val: any): void => {
   emit('update:modelValue', val)
 }
 

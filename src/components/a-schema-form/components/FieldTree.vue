@@ -34,25 +34,28 @@ const currentOptions = computed(() => {
   return localOptions.value.length > 0 ? localOptions.value : (props.field.props.options || [])
 })
 
-async function loadOptions(): Promise<void> {
+const loadOptions = async (): Promise<void> => {
   if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
   try {
-    localOptions.value = await props.optionProvider(props.field, props.formModel)
+    const res = await props.optionProvider(props.field, props.formModel)
+    localOptions.value = res
     hasLoaded.value = true
+  } catch (error) {
+    console.error(`加载选项失败:`, error)
   } finally {
     loading.value = false
   }
 }
 
-function handleFocus(): void {
-  if (!hasLoaded.value) {
+const handleFocus = (): void => {
+  if (!hasLoaded.value && props.field.logic.optionSource !== 'none') {
     loadOptions()
   }
 }
 
-function onUpdate(val: any): void {
+const onUpdate = (val: any): void => {
   emit('update:modelValue', val)
 }
 
