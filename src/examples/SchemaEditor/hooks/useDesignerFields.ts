@@ -1,6 +1,43 @@
 import { ref, computed } from 'vue'
 import type { RawBusinessField } from '../../../components/a-schema-form/types'
 
+export type DesignerState = {
+  fields: RawBusinessField[]
+  selectedIndex: number
+}
+
+/**
+ * 基于最新顺序统一重算排序权重。
+ * 纯函数化后，任何字段列表变换都会先经过这里标准化。
+ */
+const withSortOrder = (list: RawBusinessField[]) =>
+  list.map((field, index) => ({
+    ...field,
+    sortOrder: index + 1
+  }))
+
+/**
+ * 约束选中索引，避免越界状态污染后续计算。
+ */
+const normalizeSelectedIndex = (fields: RawBusinessField[], selectedIndex: number) =>
+  selectedIndex >= 0 && selectedIndex < fields.length ? selectedIndex : -1
+
+/**
+ * 生成新的设计器状态。
+ * 默认会顺带规范排序权重，只有纯字段 patch 场景才跳过。
+ */
+const createDesignerState = (
+  fields: RawBusinessField[],
+  selectedIndex: number,
+  shouldNormalizeSortOrder: boolean = true
+): DesignerState => {
+  const nextFields = shouldNormalizeSortOrder ? withSortOrder(fields) : fields
+  return {
+    fields: nextFields,
+    selectedIndex: normalizeSelectedIndex(nextFields, selectedIndex)
+  }
+}
+
 /**
  * 字段管理逻辑 Hook
  * 负责字段列表的增、删、改、查、移、克隆及清空
@@ -35,6 +72,45 @@ export const useDesignerFields = () => {
   })
 
   // --- 核心操作方法 ---
+
+  /**
+   * 统一提交字段列表与选中态。
+   * 保证 `fields` 仍然是唯一数据源，外部只传入“下一份状态”。
+   */
+  const commitState = (nextState: DesignerState) => {
+    fields.value = nextState.fields
+    selectedIndex.value = nextState.selectedIndex
+  }
+
+  /**
+   * 使用变换函数生成下一份状态。
+   * UI 层只描述“做什么”，真正的数据变换集中在纯函数中。
+   */
+  const updateState = (
+    transformer: (state: DesignerState) => DesignerState
+  ) => {
+    const currentState = createDesignerState(fields.value, selectedIndex.value, false)
+    const nextState = transformer(currentState)
+    commitState(nextState)
+  }
+
+  /**
+   * 以当前状态为输入，直接替换字段列表。
+   */
+  const replaceFields = (
+    nextFields: RawBusinessField[],
+    nextSelectedIndex: number = selectedIndex.value,
+    shouldNormalizeSortOrder: boolean = true
+  ) => {
+    commitState(createDesignerState(nextFields, nextSelectedIndex, shouldNormalizeSortOrder))
+  }
+
+  /**
+   * 根据 bid 查找字段索引。
+   * 支持传入快照状态，避免纯函数内部再次读取响应式源。
+   */
+  const findFieldIndex = (bid: string, sourceFields: RawBusinessField[] = fields.value) =>
+    sourceFields.findIndex(field => field.bid === bid)
 
   /**
    * 生成全局唯一的 attributeNum
@@ -74,30 +150,33 @@ export const useDesignerFields = () => {
    */
   const addComponent = (type: string) => {
     const newField = createNewField(type)
-    fields.value.push(newField)
-    selectedIndex.value = fields.value.length - 1
+    updateState((state) =>
+      createDesignerState([...state.fields, newField], state.fields.length)
+    )
   }
 
   /**
    * 根据索引删除字段
    */
   const removeComponent = (index: number) => {
-    fields.value.splice(index, 1)
-    // 处理选中索引的偏移
-    if (selectedIndex.value === index) {
-      selectedIndex.value = -1
-    } else if (selectedIndex.value > index) {
-      selectedIndex.value--
-    }
-    // 重新排序权重
-    fields.value.forEach((f, i) => (f.sortOrder = i + 1))
+    updateState((state) => {
+      const nextFields = state.fields.filter((_, currentIndex) => currentIndex !== index)
+      const nextSelectedIndex =
+        state.selectedIndex === index
+          ? -1
+          : state.selectedIndex > index
+            ? state.selectedIndex - 1
+            : state.selectedIndex
+
+      return createDesignerState(nextFields, nextSelectedIndex)
+    })
   }
 
   /**
    * 根据 BID 删除字段
    */
   const removeFieldByBid = (bid: string) => {
-    const index = fields.value.findIndex(f => f.bid === bid)
+    const index = findFieldIndex(bid)
     if (index >= 0) {
       removeComponent(index)
     }
@@ -106,58 +185,58 @@ export const useDesignerFields = () => {
   /**
    * 选中某个字段
    */
-  const handleFieldSelect = (field: RawBusinessField) => {
-    const index = fields.value.findIndex(f => f.bid === field.bid)
-    selectedIndex.value = index
+  const handleFieldSelect = (bid: string) => {
+    selectedIndex.value = findFieldIndex(bid)
   }
 
   /**
    * 克隆一个现有字段
    */
   const cloneField = (bid: string) => {
-    const index = fields.value.findIndex(f => f.bid === bid)
-    if (index < 0) return
-    
-    const source = fields.value[index]
-    const newAttributeNum = generateUniqueAttributeNum(source.attributeNum.split('_')[0])
-    
-    const newField: RawBusinessField = {
-      ...JSON.parse(JSON.stringify(source)), // 深拷贝，防止修改影响原字段的 constraintInfo
-      bid: Date.now().toString() + Math.random().toString().slice(2, 6),
-      attributeNum: newAttributeNum,
-      displayName: `${source.displayName} (副本)`
-    }
-    
-    fields.value.splice(index + 1, 0, newField)
-    // 统一更新权重
-    fields.value.forEach((f, i) => (f.sortOrder = i + 1))
-    selectedIndex.value = index + 1
+    updateState((state) => {
+      const index = findFieldIndex(bid, state.fields)
+      if (index < 0) return state
+
+      const source = state.fields[index]
+      const newAttributeNum = generateUniqueAttributeNum(source.attributeNum.split('_')[0])
+
+      const newField: RawBusinessField = {
+        ...JSON.parse(JSON.stringify(source)), // 深拷贝，防止修改影响原字段的 constraintInfo
+        bid: Date.now().toString() + Math.random().toString().slice(2, 6),
+        attributeNum: newAttributeNum,
+        displayName: `${source.displayName} (副本)`
+      }
+
+      const nextFields = [...state.fields]
+      nextFields.splice(index + 1, 0, newField)
+      return createDesignerState(nextFields, index + 1)
+    })
   }
 
   /**
    * 移动字段位置 (上移/下移)
    */
   const moveField = (bid: string, direction: 'up' | 'down') => {
-    const index = fields.value.findIndex(f => f.bid === bid)
-    if (index < 0) return
+    updateState((state) => {
+      const index = findFieldIndex(bid, state.fields)
+      if (index < 0) return state
 
-    const targetIndex = direction === 'up' ? index - 1 : index + 1
-    if (targetIndex < 0 || targetIndex >= fields.value.length) return
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= state.fields.length) return state
 
-    // 交换位置
-    const temp = fields.value[index]
-    fields.value[index] = fields.value[targetIndex]
-    fields.value[targetIndex] = temp
+      const nextFields = [...state.fields]
+      const [movedField] = nextFields.splice(index, 1)
+      nextFields.splice(targetIndex, 0, movedField)
 
-    // 同步权重
-    fields.value.forEach((f, i) => (f.sortOrder = i + 1))
+      const nextSelectedIndex =
+        state.selectedIndex === index
+          ? targetIndex
+          : state.selectedIndex === targetIndex
+            ? index
+            : state.selectedIndex
 
-    // 同步选中状态
-    if (selectedIndex.value === index) {
-      selectedIndex.value = targetIndex
-    } else if (selectedIndex.value === targetIndex) {
-      selectedIndex.value = index
-    }
+      return createDesignerState(nextFields, nextSelectedIndex)
+    })
   }
 
   /**
@@ -166,8 +245,7 @@ export const useDesignerFields = () => {
   const clearCanvas = () => {
     if (fields.value.length === 0) return
     if (confirm('确定要清空所有字段吗？')) {
-      fields.value = []
-      selectedIndex.value = -1
+      commitState(createDesignerState([], -1))
     }
   }
 
@@ -186,14 +264,24 @@ export const useDesignerFields = () => {
    * 只接收 patch，确保 `fields` 是唯一数据源。
    */
   const patchFieldByBid = (bid: string, patch: Partial<RawBusinessField>) => {
-    const index = fields.value.findIndex(f => f.bid === bid)
-    if (index >= 0) {
-      const nextField = { ...fields.value[index], ...patch }
-      if (JSON.stringify(fields.value[index]) === JSON.stringify(nextField)) {
-        return
+    updateState((state) => {
+      const index = findFieldIndex(bid, state.fields)
+      if (index < 0) return state
+
+      const currentField = state.fields[index]
+      const changedEntries = Object.entries(patch).filter(([key, value]) => currentField[key as keyof RawBusinessField] !== value)
+
+      if (changedEntries.length === 0) return state
+
+      const nextFields = [...state.fields]
+      nextFields[index] = {
+        ...currentField,
+        ...Object.fromEntries(changedEntries)
       }
-      fields.value[index] = nextField
-    }
+
+      // 属性面板 patch 不改变顺序，只更新当前项，避免每次输入都重算整表。
+      return createDesignerState(nextFields, state.selectedIndex, false)
+    })
   }
 
   /**
@@ -220,6 +308,9 @@ export const useDesignerFields = () => {
     clearCanvas,
     isFirstField,
     isLastField,
+    commitState,
+    updateState,
+    replaceFields,
     patchFieldByBid,
     updateSelectedField
   }

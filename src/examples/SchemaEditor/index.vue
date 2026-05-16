@@ -95,7 +95,7 @@
           <div 
             class="preview-canvas"
             @dragover.prevent="isDesignerMode && handleDragOverCanvas($event)"
-            @drop="isDesignerMode && handleDropOnCanvas($event)"
+            @drop="isDesignerMode && handleDropOnCanvas()"
           >
             <div 
               v-if="fields.length === 0" 
@@ -139,7 +139,7 @@
                   @dragleave="isDesignerMode && handleDragLeave()"
                   @drop.stop="isDesignerMode && handleDropOnField($event, field.bid)"
                   @dragend="isDesignerMode && handleDragEnd()"
-                  @click="isDesignerMode && handleFieldSelect(field)"
+                  @click="isDesignerMode && handleFieldSelect(field.bid)"
                 >
                   <!-- 占位符提示线 -->
                   <div v-if="isDesignerMode" class="drop-placeholder-line top"></div>
@@ -245,13 +245,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ASchemaForm from '../../components/a-schema-form/index.vue'
 import type { RawBusinessField, FormMode } from '../../components/a-schema-form/types'
 
 // 导入 Hook
 import { useDesignerDrag } from './hooks/useDesignerDrag'
-import { useDesignerFields } from './hooks/useDesignerFields.ts'
+import { useDesignerFields } from './hooks/useDesignerFields'
 import { useHistory } from './hooks/useHistory'
 import PropertyPanel from './components/PropertyPanel.vue'
 
@@ -309,13 +309,14 @@ const {
   clearCanvas,
   isFirstField,
   isLastField,
+  updateState,
+  replaceFields,
   updateSelectedField
 } = useDesignerFields()
 
 // B. 拖拽交互 (库拖入、画布排序、腾空效果)
 const {
   draggingBid,
-  draggingType,
   overBid,
   overPosition,
   handleDragStartFromLibrary,
@@ -326,7 +327,7 @@ const {
   handleDragEnd,
   handleDropOnCanvas,
   handleDropOnField
-} = useDesignerDrag(fields, selectedIndex, createNewField)
+} = useDesignerDrag(fields, createNewField, updateState)
 
 // C. 处理来自属性面板的更新
 const handleUpdateField = (patch: Partial<RawBusinessField>) => {
@@ -355,6 +356,8 @@ const { undo, redo, canUndo, canRedo, initHistory } = useHistory(fields, selecte
 const showExportModal = ref(false)
 const showImportModal = ref(false)
 const importRawJson = ref('')
+let draftSaveTimer: number | null = null
+let globalConfigSaveTimer: number | null = null
 
 // --- 3. 导入导出逻辑 ---
 
@@ -402,14 +405,14 @@ const handleImport = () => {
   try {
     const data = JSON.parse(importRawJson.value)
     if (Array.isArray(data)) {
-      fields.value = data.map((item, index) => ({
+      const nextFields = data.map((item, index) => ({
         ...item,
         bid: item.bid || Date.now().toString() + Math.random().toString().slice(2, 6),
         attributeNum: item.attributeNum || `field_${index + 1}`,
         sortOrder: index + 1
       }))
+      replaceFields(nextFields, -1)
       showImportModal.value = false
-      selectedIndex.value = -1
       // 导入后重新初始化历史记录
       initHistory(fields.value)
     } else {
@@ -432,7 +435,7 @@ onMounted(() => {
   const draft = localStorage.getItem(STORAGE_KEY)
   if (draft) {
     try {
-      fields.value = JSON.parse(draft)
+      replaceFields(JSON.parse(draft), -1)
       initHistory(fields.value) // 初始化历史记录
     } catch (e) {
       console.error('加载草稿失败', e)
@@ -450,13 +453,16 @@ onMounted(() => {
     }
   }
 
-  // 监听快捷键
   window.addEventListener('keydown', handleKeydown)
 })
 
-import { onUnmounted } from 'vue'
-
 onUnmounted(() => {
+  if (draftSaveTimer) {
+    window.clearTimeout(draftSaveTimer)
+  }
+  if (globalConfigSaveTimer) {
+    window.clearTimeout(globalConfigSaveTimer)
+  }
   window.removeEventListener('keydown', handleKeydown)
 })
 
@@ -481,14 +487,27 @@ const handleKeydown = (e: KeyboardEvent) => {
  * 字段列表变化时自动保存草稿
  */
 watch(fields, (newVal) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
+  if (draftSaveTimer) {
+    window.clearTimeout(draftSaveTimer)
+  }
+
+  // 对本地草稿写入做轻量防抖，避免拖拽和连续输入时阻塞主线程。
+  draftSaveTimer = window.setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
+  }, 120)
 }, { deep: true })
 
 /**
  * 全局配置变化时自动保存
  */
 watch(globalConfig, (newVal) => {
-  localStorage.setItem(GLOBAL_CONFIG_KEY, JSON.stringify(newVal))
+  if (globalConfigSaveTimer) {
+    window.clearTimeout(globalConfigSaveTimer)
+  }
+
+  globalConfigSaveTimer = window.setTimeout(() => {
+    localStorage.setItem(GLOBAL_CONFIG_KEY, JSON.stringify(newVal))
+  }, 120)
 }, { deep: true })
 
 </script>
@@ -652,8 +671,9 @@ watch(globalConfig, (newVal) => {
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 12px;
-  /* 拖拽过程中避免触发布局位移，只保留颜色过渡 */
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  /* 卡片只做轻量级过渡，减少重排带来的拖拽卡顿。 */
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  will-change: border-color, background-color, box-shadow, opacity;
 }
 
 /* 仅在设计模式下有交互样式 */
