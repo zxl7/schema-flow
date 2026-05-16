@@ -1,14 +1,15 @@
 import { createApp } from 'vue'
-import Antd from 'ant-design-vue'
-import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
-import likeUI from './components'
+import Antd from 'ant-design-vue'
+import 'ant-design-vue/dist/reset.css'
+
+// 本地引入测试
+import SchemaFlow from './components'
 
 const app = createApp(App)
-
-app.use(Antd)
 app.use(router)
-app.use(likeUI)
+app.use(Antd)
+app.use(SchemaFlow)
 
 app.mount('#app')

@@ -1,4 +1,4 @@
-# Srx-UI 业务组件库
+# SchemaFlow 业务组件库
 
 一套基于 **Vue 3 + Ant Design Vue + TypeScript** 构建的轻量级业务组件库，采用**函数式编程**思想，实现业务与视图模型的解耦。
 
@@ -30,25 +30,63 @@ npm run build:lib
 
 在项目中引入：
 
-```ts
-import SrxUi from 'srx-ui'
-import 'srx-ui/style.css'
+```typescript
+import { createApp } from 'vue'
+import App from './App.vue'
+import SchemaFlow from 'schema-flow'
+import 'schema-flow/style.css' // 引入样式
 
 const app = createApp(App)
-app.use(SrxUi)
+app.use(SchemaFlow)
 app.mount('#app')
 ```
 
 ## ✨ 核心组件
 
-### ASchemaForm (动态业务表单)
+### SchemaFlow (企业级动态表单引擎)
 
-基于 JSON Schema 驱动的动态表单引擎，支持多种业务控件及复杂的约束逻辑。
+`SchemaFlow` 是一个基于 **Vue 3** 和 **Ant Design Vue** 构建的企业级 Schema 驱动动态表单引擎及可视化设计器。
 
-**核心特性：**
-- **数据驱动**：直接消费后端原始元数据。
-- **解耦设计**：通过 `dictionaries` 和 `optionProvider` 将业务数据源剥离。
-- **灵活扩展**：提供 `#header` 和 `#footer` 插槽，支持高度自定义 UI。
+#### 核心特性
 
-详细文档请参考：[ASchemaForm README](file:///Users/zxl/Desktop/private/components-ui/src/components/a-schema-form/README.md)
+1. **Schema 驱动 (SSOT)**: 
+   - 采用单一数据源原则，底层通过纯函数将原始领域模型转换为视图模型。
+   - 前后端协议统一，极大地降低了沟通与开发成本。
+
+2. **高性能渲染**:
+   - 分布式字段状态管理，支持组件按需更新。
+   - 内置强大的逻辑表达式引擎，支持声明式联动逻辑配置。
+
+3. **可视化设计器 (Low-Code Editor)**:
+   - **原生拖拽引擎**: 支持从组件库拖拽入画布，以及画布内组件的平滑排序（带动态腾空视觉反馈）。
+   - **历史记录机制**: 内置 Undo/Redo 历史栈，提供类似专业 IDE 的操作体验。
+   - **细粒度权限控制**: 提供新增 (Create)、编辑 (Edit)、预览 (View) 三种场景的自动适配与权限分离。
+   - **全局配置控制**: 支持可视化配置表单尺寸、水平/垂直布局、组件最大宽度等。
+
+4. **开箱即用的业务组件**:
+   - 深度集成并优化了 Input, Select, Radio, CheckboxGroup, DatePicker, Rate, Slider 等十余种高频业务组件。
+   - 自动解析远程 API 作为数据源，并实现异步数据绑定。
+
+#### 安装与使用
+
+##### 安装依赖
+
+```bash
+npm install schema-flow
+```
+
+##### 全局注册
+
+```typescript
+import { createApp } from 'vue'
+import App from './App.vue'
+import SchemaFlow from 'schema-flow'
+import 'schema-flow/dist/style.css'
+
+const app = createApp(App)
+app.use(SchemaFlow)
+app.mount('#app')
+```
+
+详细文档请参考：[SchemaFlow README](file:///Users/zxl/Desktop/private/components-ui/src/components/a-schema-form/README.md)
 

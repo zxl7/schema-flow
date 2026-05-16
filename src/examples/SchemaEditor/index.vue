@@ -4,7 +4,7 @@
     <header class="editor-header">
       <div class="header-left">
         <a-button @click="$router.push('/form-service')">返回预览</a-button>
-        <h2 class="title">ASchemaForm 设计器</h2>
+        <h2 class="title">SchemaFlow 设计器</h2>
       </div>
       <div class="header-actions">
         <a-space>

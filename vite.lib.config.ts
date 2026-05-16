@@ -12,8 +12,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/components/index.ts', import.meta.url)),
-      name: 'SrxUi',
-      fileName: 'srx-ui',
+      name: 'SchemaFlow',
+      fileName: 'schema-flow',
     },
     rollupOptions: {
       external: ['vue', 'ant-design-vue'],

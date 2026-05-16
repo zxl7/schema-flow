@@ -11,7 +11,7 @@
       </section>
 
       <!-- 核心动态表单组件 -->
-      <a-schema-form
+      <schema-flow
         ref="formRef"
         :fields="demoFields"
         :mode="currentMode"
@@ -21,7 +21,7 @@
         @submit="onFormSubmit"
         @change="onFormChange"
       >
-        <!-- 使用 header 插槽自定义标题 and 按钮，将业务 UI 逻辑从组件库中剥离 -->
+        <!-- 使用 header 插槽自定义标题 and 按钮，将业务 UI 逻辑 from 组件库中剥离 -->
         <template #header>
           <div class="form-header">
             <div class="header-info">
@@ -35,7 +35,7 @@
             </a-space>
           </div>
         </template>
-      </a-schema-form>
+      </schema-flow>
     </div>
 
     <!-- 数据实时监控面板 -->
@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import demoFields from '../../../demo.json'
-import ASchemaForm from '../../components/a-schema-form/index.vue'
+import { SchemaFlow } from '../../components'
 import type { BusinessField, FieldOption, FormMode, FormModel } from '../../components/a-schema-form/types'
 
 /**

@@ -1,18 +1,16 @@
-import type { App, Plugin } from 'vue'
+import type { App } from 'vue'
 import ASchemaForm from './a-schema-form/index.vue'
 
-const components = [
-  { name: 'a-schema-form', component: ASchemaForm },
-]
+// 导出组件
+export { ASchemaForm, ASchemaForm as SchemaFlow }
+// 导出类型
+export * from './a-schema-form/types'
+export * from './a-schema-form/utils'
 
-const SrxUi: Plugin = {
+// 提供全局注册支持
+export default {
   install(app: App) {
-    components.forEach(({ name, component }) => {
-      app.component(name, component)
-    })
-  },
+    app.component('SchemaFlow', ASchemaForm) // 推荐的新名称 (不带 A)
+    app.component('ASchemaForm', ASchemaForm) // 兼容老代码 (带 A)
+  }
 }
-
-export { ASchemaForm }
-
-export default SrxUi

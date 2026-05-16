@@ -68,7 +68,7 @@ import BusinessField from './BusinessField.vue'
 
 type FormRule = { required?: boolean; message?: string; trigger?: string }
 
-defineOptions({ name: 'ASchemaForm' })
+defineOptions({ name: 'SchemaFlow' })
 
 const props = withDefaults(
   defineProps<{

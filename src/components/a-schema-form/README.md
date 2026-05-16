@@ -1,6 +1,6 @@
-# ASchemaForm 动态业务表单
+# SchemaFlow 动态业务表单
 
-`ASchemaForm` 是一个高度可配置的动态表单引擎，旨在通过一套标准的元数据（JSON Schema）驱动复杂的业务表单渲染。
+`SchemaFlow` 是一个高度可配置的动态表单引擎，旨在通过一套标准的元数据（JSON Schema）驱动复杂的业务表单渲染。
 
 ## 🌟 核心理念
 
@@ -12,16 +12,16 @@
 
 ```vue
 <template>
-  <a-schema-form
-    title="工序信息"
+  <SchemaFlow
+    title="表单信息"
     :fields="rawFields"
-    :dictionaries="myDictionaries"
-    @submit="handleSubmit"
+    mode="create"
+    @submit="onSubmit"
   />
 </template>
 
 <script setup lang="ts">
-import { ASchemaForm } from 'srx-ui'
+// import { SchemaFlow } from 'schema-flow' // 局部引入
 import rawFields from './fields.json'
 
 const myDictionaries = {
