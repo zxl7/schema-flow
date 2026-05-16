@@ -55,6 +55,20 @@ export interface UrlConstraint {
 }
 
 /**
+ * 表单全局配置
+ */
+export interface FormGlobalConfig {
+  layout: 'horizontal' | 'vertical' | 'inline'
+  size: 'small' | 'middle' | 'large'
+  labelCol: {
+    style: {
+      width: number | string
+    }
+  }
+  maxWidth: number
+}
+
+/**
  * 后端原始领域模型 (Domain Model)
  */
 export interface RawBusinessField {
@@ -71,6 +85,11 @@ export interface RawBusinessField {
   viewState?: string
   groupTag?: string | null
   widthProportion?: string | null
+  /**
+   * 声明式联动逻辑 (JS 表达式)
+   * 可以在这里配置隐藏/显示的逻辑，例如："$form.field_1 === '1'"
+   */
+  logicExpression?: string | null
 }
 
 /**
@@ -104,6 +123,10 @@ export interface BusinessField extends RawBusinessField {
     hidden: boolean
     formWidth: string
     valueType: 'string' | 'number' | 'boolean' | 'date' | 'array' | 'unknown'
+    /**
+     * 原始表达式
+     */
+    expression?: string | null
   }
 }
 

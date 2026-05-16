@@ -37,15 +37,28 @@ export const useDesignerFields = () => {
   // --- 核心操作方法 ---
 
   /**
+   * 生成全局唯一的 attributeNum
+   */
+  const generateUniqueAttributeNum = (basePrefix = 'field') => {
+    let index = fields.value.length + 1
+    let newNum = `${basePrefix}_${index}`
+    while (fields.value.some(f => f.attributeNum === newNum)) {
+      index++
+      newNum = `${basePrefix}_${index}`
+    }
+    return newNum
+  }
+
+  /**
    * 创建新字段的基础模板
    * @param type 控件类型 (controlStyle)
    */
   const createNewField = (type: string): RawBusinessField => {
-    const id = fields.value.length + 1
+    const attributeNum = generateUniqueAttributeNum()
     return {
-      bid: Date.now().toString() + Math.random(),
-      attributeNum: `field_${id}`,
-      displayName: `新字段_${id}`,
+      bid: Date.now().toString() + Math.random().toString().slice(2, 6),
+      attributeNum,
+      displayName: `新字段_${attributeNum.split('_')[1]}`,
       controlStyle: type,
       sortOrder: fields.value.length + 1,
       constraintInfo: null,
@@ -106,10 +119,12 @@ export const useDesignerFields = () => {
     if (index < 0) return
     
     const source = fields.value[index]
+    const newAttributeNum = generateUniqueAttributeNum(source.attributeNum.split('_')[0])
+    
     const newField: RawBusinessField = {
-      ...JSON.parse(JSON.stringify(source)),
-      bid: Date.now().toString() + Math.random(),
-      attributeNum: `${source.attributeNum}_copy`,
+      ...JSON.parse(JSON.stringify(source)), // 深拷贝，防止修改影响原字段的 constraintInfo
+      bid: Date.now().toString() + Math.random().toString().slice(2, 6),
+      attributeNum: newAttributeNum,
       displayName: `${source.displayName} (副本)`
     }
     
@@ -149,6 +164,7 @@ export const useDesignerFields = () => {
    * 清空画布
    */
   const clearCanvas = () => {
+    if (fields.value.length === 0) return
     if (confirm('确定要清空所有字段吗？')) {
       fields.value = []
       selectedIndex.value = -1
@@ -165,6 +181,16 @@ export const useDesignerFields = () => {
    */
   const isLastField = (bid: string) => fields.value.length > 0 && fields.value[fields.value.length - 1].bid === bid
 
+  /**
+   * 更新字段内容 (用于独立组件的 v-model 同步)
+   */
+  const updateField = (updatedField: RawBusinessField) => {
+    const index = fields.value.findIndex(f => f.bid === updatedField.bid)
+    if (index >= 0) {
+      fields.value[index] = { ...updatedField }
+    }
+  }
+
   return {
     fields,
     selectedIndex,
@@ -179,6 +205,7 @@ export const useDesignerFields = () => {
     moveField,
     clearCanvas,
     isFirstField,
-    isLastField
+    isLastField,
+    updateField
   }
 }

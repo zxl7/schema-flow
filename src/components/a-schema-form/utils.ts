@@ -83,6 +83,7 @@ export const normalizeField = (
     urlConstraint: parseUrlConstraint(constraints.url?.value),
     translateKey: constraints.translate?.value as string,
     valueType: (['double'].includes(raw.controlStyle) || raw.dataType === 'Double') ? 'number' : 'string',
+    expression: raw.logicExpression || null,
   }
 
   /**

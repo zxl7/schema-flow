@@ -8,6 +8,10 @@
       </div>
       <div class="header-actions">
         <a-space>
+          <a-button-group>
+            <a-button :disabled="!canUndo" @click="undo" title="撤销 (Ctrl+Z)">↩ 撤销</a-button>
+            <a-button :disabled="!canRedo" @click="redo" title="重做 (Ctrl+Y)">↪ 重做</a-button>
+          </a-button-group>
           <a-button danger @click="clearCanvas">清空画布</a-button>
           <a-button @click="importJson">导入 JSON</a-button>
           <a-button type="primary" @click="exportJson">导出 JSON</a-button>
@@ -16,22 +20,65 @@
     </header>
 
     <div class="editor-content">
-      <!-- 左侧：组件库 -->
+      <!-- 左侧：全局配置与组件库 -->
       <aside class="editor-sidebar left">
-        <div class="sidebar-title">组件库</div>
-        <div class="component-list">
-          <div 
-            v-for="item in availableComponents" 
-            :key="item.type" 
-            class="component-item"
-            draggable="true"
-            @dragstart="handleDragStartFromLibrary($event, item.type)"
-            @click="addComponent(item.type)"
-          >
-            <span class="icon">{{ item.icon }}</span>
-            {{ item.label }}
-          </div>
-        </div>
+        <a-tabs v-model:activeKey="leftTab" size="small" centered>
+          <a-tab-pane key="components" tab="组件库">
+            <div class="component-list">
+              <div 
+                v-for="item in availableComponents" 
+                :key="item.type" 
+                class="component-item"
+                draggable="true"
+                @dragstart="handleDragStartFromLibrary($event, item.type)"
+                @click="addComponent(item.type)"
+              >
+                <span class="icon">{{ item.icon }}</span>
+                {{ item.label }}
+              </div>
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="global" tab="表单配置">
+            <div class="global-config-panel">
+              <a-form layout="vertical" size="small">
+                <a-form-item label="表单布局 (Layout)">
+                  <a-radio-group v-model:value="globalConfig.layout" button-style="solid">
+                    <a-radio-button value="horizontal">水平</a-radio-button>
+                    <a-radio-button value="vertical">垂直</a-radio-button>
+                    <a-radio-button value="inline">内联</a-radio-button>
+                  </a-radio-group>
+                </a-form-item>
+                
+                <a-form-item label="组件尺寸 (Size)">
+                  <a-radio-group v-model:value="globalConfig.size" button-style="solid">
+                    <a-radio-button value="small">小</a-radio-button>
+                    <a-radio-button value="middle">中</a-radio-button>
+                    <a-radio-button value="large">大</a-radio-button>
+                  </a-radio-group>
+                </a-form-item>
+
+                <a-form-item label="标签宽度 (Label Width)" v-if="globalConfig.layout === 'horizontal'">
+                  <a-input-number 
+                    v-model:value="globalConfig.labelCol.style.width" 
+                    :min="50" 
+                    :max="300" 
+                    addon-after="px" 
+                  />
+                </a-form-item>
+
+                <a-form-item label="表单宽度 (MaxWidth)">
+                  <a-input-number 
+                    v-model:value="globalConfig.maxWidth" 
+                    :min="400" 
+                    :max="1200" 
+                    addon-after="px" 
+                    style="width: 100%"
+                  />
+                </a-form-item>
+              </a-form>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
       </aside>
 
       <!-- 中间：画布/预览 -->
@@ -48,7 +95,7 @@
           <div 
             class="preview-canvas"
             @dragover.prevent
-            @drop="handleDropOnCanvas"
+            @drop="isDesignerMode && handleDropOnCanvas($event)"
           >
             <div 
               v-if="fields.length === 0" 
@@ -62,12 +109,14 @@
               v-else
               :fields="fields"
               :mode="previewMode"
-              :force-show-all="previewMode !== 'view'"
+              :force-show-all="isDesignerMode"
+              :global-config="globalConfig"
               title="表单预览"
+              @change="handleFormChange"
             >
               <!-- 增加一些交互，让预览中的元素可点击 -->
               <template #header>
-                <div class="canvas-header">
+                <div class="canvas-header" v-if="isDesignerMode">
                   <span>提示：可拖拽左侧组件入库，或在画布内拖拽排序</span>
                 </div>
               </template>
@@ -77,28 +126,28 @@
                 <div 
                   class="field-item-card" 
                   :class="{ 
-                    active: selectedField && selectedField.bid === field.bid,
-                    'is-designer': previewMode !== 'view',
+                    active: isDesignerMode && selectedField && selectedField.bid === field.bid,
+                    'is-designer': isDesignerMode,
                     'is-hidden': field.logic.hidden,
                     'is-readonly': field.props.disabled,
-                    'is-dragging': draggingBid === field.bid,
-                    'drop-over-top': overBid === field.bid && overPosition === 'top',
-                    'drop-over-bottom': overBid === field.bid && overPosition === 'bottom'
+                    'is-dragging': isDesignerMode && draggingBid === field.bid,
+                    'drop-over-top': isDesignerMode && overBid === field.bid && overPosition === 'top',
+                    'drop-over-bottom': isDesignerMode && overBid === field.bid && overPosition === 'bottom'
                   }"
-                  :draggable="previewMode !== 'view'"
-                  @dragstart="handleDragStartFromCanvas($event, field.bid)"
-                  @dragover.prevent="handleDragOverField($event, field.bid)"
-                  @dragleave="handleDragLeave"
-                  @drop.stop="handleDropOnField($event, field.bid)"
-                  @dragend="handleDragEnd"
-                  @click="previewMode !== 'view' && handleFieldSelect(field)"
+                  :draggable="isDesignerMode"
+                  @dragstart="isDesignerMode && handleDragStartFromCanvas($event, field.bid)"
+                  @dragover.prevent="isDesignerMode && handleDragOverField($event, field.bid)"
+                  @dragleave="isDesignerMode && handleDragLeave()"
+                  @drop.stop="isDesignerMode && handleDropOnField($event, field.bid)"
+                  @dragend="isDesignerMode && handleDragEnd()"
+                  @click="isDesignerMode && handleFieldSelect(field)"
                 >
                   <!-- 占位符提示线 -->
-                  <div class="drop-placeholder-line top"></div>
-                  <div class="drop-placeholder-line bottom"></div>
+                  <div v-if="isDesignerMode" class="drop-placeholder-line top"></div>
+                  <div v-if="isDesignerMode" class="drop-placeholder-line bottom"></div>
 
-                  <!-- 顶部操作栏：预览模式下隐藏 -->
-                  <div v-if="previewMode !== 'view'" class="field-card-actions">
+                  <!-- 顶部操作栏：仅设计模式可见 -->
+                  <div v-if="isDesignerMode" class="field-card-actions">
                     <span v-if="field.logic.hidden" class="status-badge hidden">已隐藏</span>
                     <span v-if="field.props.disabled" class="status-badge readonly">只读</span>
                     <a-button-group size="small">
@@ -155,118 +204,14 @@
         </div>
       </main>
 
-      <!-- 右侧：属性配置 -->
-      <aside class="editor-sidebar right">
-        <div class="sidebar-title">属性配置</div>
-        <div v-if="selectedField" class="property-panel">
-          <!-- ID 重复警告 -->
-          <a-alert
-            v-if="isIdDuplicated"
-            message="字段 ID (attributeNum) 已存在，请修改以防数据覆盖"
-            type="error"
-            show-icon
-            style="margin-bottom: 16px"
-          />
-          <a-form layout="vertical">
-            <a-form-item label="字段 ID (attributeNum)">
-              <a-input v-model:value="selectedField.attributeNum" placeholder="唯一标识，如: userName" />
-            </a-form-item>
-            <a-form-item label="显示名称 (displayName)">
-              <a-input v-model:value="selectedField.displayName" />
-            </a-form-item>
-            <a-form-item label="控件类型 (controlStyle)">
-              <a-select v-model:value="selectedField.controlStyle">
-                <a-select-option v-for="opt in availableComponents" :key="opt.type" :value="opt.type">
-                  {{ opt.label }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-            <a-form-item label="分组名称 (groupTag)">
-              <a-input v-model:value="selectedField.groupTag" />
-            </a-form-item>
-            <a-form-item label="排序权重 (sortOrder)">
-              <a-input-number v-model:value="selectedField.sortOrder" :min="0" />
-            </a-form-item>
-
-            <!-- 1. 数据源配置 (调整到约束配置上方) -->
-            <template v-if="['select', 'radio', 'checkboxGroup'].includes(selectedField.controlStyle)">
-              <a-divider>数据源配置</a-divider>
-              <a-form-item label="数据源类型">
-                <a-radio-group v-model:value="dataSourceType" size="small">
-                  <a-radio-button value="enum">静态枚举</a-radio-button>
-                  <a-radio-button value="url">远程 URL</a-radio-button>
-                </a-radio-group>
-              </a-form-item>
-
-              <!-- 静态枚举编辑 -->
-              <template v-if="dataSourceType === 'enum'">
-                <a-form-item label="静态选项 (用 || 分隔)">
-                  <a-textarea 
-                    v-model:value="fieldEnumOptions" 
-                    placeholder="例如: 选项1||选项2||选项3" 
-                    :rows="3"
-                  />
-                  <span class="tip">提示：输入 选项1||选项2 即可生成下拉列表</span>
-                </a-form-item>
-              </template>
-
-              <!-- URL 配置编辑 -->
-              <template v-if="dataSourceType === 'url'">
-                <a-form-item label="接口地址 (URL)">
-                  <a-input v-model:value="urlPath" placeholder="/api/list" />
-                </a-form-item>
-                <div class="url-config-grid">
-                  <a-form-item label="Value 字段">
-                    <a-input v-model:value="urlValueKey" placeholder="id" />
-                  </a-form-item>
-                  <a-form-item label="Label 字段">
-                    <a-input v-model:value="urlLabelKey" placeholder="name" />
-                  </a-form-item>
-                </div>
-              </template>
-            </template>
-
-            <!-- 2. 约束配置 -->
-            <a-divider>约束配置</a-divider>
-
-            <a-form-item label="默认值">
-              <a-input v-model:value="fieldDefaultValue" placeholder="请输入默认值" />
-            </a-form-item>
-            <div class="constraint-item">
-              <a-checkbox v-model:checked="isFieldRequired">是否必填</a-checkbox>
-            </div>
-
-            <!-- 3. 状态配置 (调整到最下方) -->
-            <a-divider>状态配置 (Permissions)</a-divider>
-            <div class="state-config-grid">
-              <a-form-item label="新增模式 (Create)">
-                <a-select v-model:value="selectedField.createState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="编辑模式 (Edit)">
-                <a-select v-model:value="selectedField.editState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="预览模式 (View)">
-                <a-select v-model:value="selectedField.viewState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-            </div>
-          </a-form>
-        </div>
-        <div v-else class="empty-tip">
-          请选择一个字段进行配置
-        </div>
-      </aside>
+      <!-- 右侧：属性配置 (在新增和编辑模式下可见) -->
+      <PropertyPanel
+        v-if="isDesignerMode"
+        :selected-field="selectedField"
+        :is-id-duplicated="isIdDuplicated"
+        :available-components="availableComponents"
+        @update:field="handleUpdateField"
+      />
     </div>
 
     <!-- 导出弹窗 -->
@@ -308,8 +253,10 @@ import { normalizeField } from '../../components/a-schema-form/utils'
 
 // 导入 Hook
 import { useDesignerDrag } from './hooks/useDesignerDrag'
-import { useDesignerFields } from './hooks/useDesignerFields'
+import { useDesignerFields } from './hooks/useDesignerFields.ts'
 import { useFieldProperties } from './hooks/useFieldProperties'
+import { useHistory } from './hooks/useHistory'
+import PropertyPanel from './components/PropertyPanel.vue'
 
 // 导入所有基础组件用于预览
 import FieldInput from '../../components/a-schema-form/components/FieldInput.vue'
@@ -320,6 +267,9 @@ import FieldRadio from '../../components/a-schema-form/components/FieldRadio.vue
 import FieldCheckboxGroup from '../../components/a-schema-form/components/FieldCheckboxGroup.vue'
 import FieldRate from '../../components/a-schema-form/components/FieldRate.vue'
 import FieldSlider from '../../components/a-schema-form/components/FieldSlider.vue'
+
+// --- 1. 组件库与基础配置 ---
+import type { FormGlobalConfig } from '../../components/a-schema-form/types'
 
 // 1. 可用组件列表
 const availableComponents = [
@@ -362,7 +312,8 @@ const {
   moveField,
   clearCanvas,
   isFirstField,
-  isLastField
+  isLastField,
+  updateField
 } = useDesignerFields()
 
 // B. 拖拽交互 (库拖入、画布排序、腾空效果)
@@ -380,20 +331,34 @@ const {
   handleDropOnField
 } = useDesignerDrag(fields, selectedIndex, createNewField)
 
-// C. 属性配置 (约束、权限、数据源)
-const {
-  dataSourceType,
-  urlPath,
-  urlValueKey,
-  urlLabelKey,
-  isFieldRequired,
-  fieldDefaultValue,
-  fieldEnumOptions
-} = useFieldProperties(selectedField)
+// C. 处理来自属性面板的更新
+const handleUpdateField = (updatedField: RawBusinessField) => {
+  updateField(updatedField)
+}
 
 // D. 本地预览相关状态
 const previewMode = ref<FormMode>('create')
 const previewValues = ref<Record<string, any>>({})
+const leftTab = ref('components') // 左侧面板的 Tab 切换状态
+
+// 表单全局配置状态
+const globalConfig = ref<FormGlobalConfig>({
+  layout: 'vertical',
+  size: 'middle',
+  labelCol: { style: { width: 120 } },
+  maxWidth: 800
+})
+
+// 只有 create 和 edit 模式才算真正的设计器模式（允许修改 schema）
+const isDesignerMode = computed(() => previewMode.value === 'create' || previewMode.value === 'edit')
+
+// 监听表单内部数据变化，同步到外部，用于联动计算
+const handleFormChange = (values: Record<string, any>) => {
+  previewValues.value = { ...values }
+}
+
+// F. 撤销重做历史记录
+const { undo, redo, canUndo, canRedo, initHistory } = useHistory(fields, selectedIndex)
 
 // E. 弹窗相关状态
 const showExportModal = ref(false)
@@ -446,12 +411,16 @@ const handleImport = () => {
   try {
     const data = JSON.parse(importRawJson.value)
     if (Array.isArray(data)) {
-      fields.value = data.map(item => ({
+      fields.value = data.map((item, index) => ({
         ...item,
-        bid: item.bid || Date.now().toString() + Math.random()
+        bid: item.bid || Date.now().toString() + Math.random().toString().slice(2, 6),
+        attributeNum: item.attributeNum || `field_${index + 1}`,
+        sortOrder: index + 1
       }))
       showImportModal.value = false
       selectedIndex.value = -1
+      // 导入后重新初始化历史记录
+      initHistory(fields.value)
     } else {
       alert('请输入正确的 JSON 数组格式')
     }
@@ -469,14 +438,27 @@ const applyDefaultValues = () => {
   fields.value.forEach(f => {
     const normalized = normalizeField(f, previewMode.value)
     if (normalized.logic.defaultValue !== undefined && normalized.logic.defaultValue !== null) {
-      previewValues.value[f.attributeNum] = normalized.logic.defaultValue
+      if (previewValues.value[f.attributeNum] === undefined) {
+        previewValues.value[f.attributeNum] = normalized.logic.defaultValue
+      }
     }
   })
 }
 
+// 监听选中字段的约束变化，实时更新预览值
+watch(() => selectedField.value?.constraintInfo, () => {
+  if (selectedField.value) {
+    const normalized = normalizeField(selectedField.value, previewMode.value)
+    if (normalized.logic.defaultValue !== undefined) {
+      previewValues.value[selectedField.value.attributeNum] = normalized.logic.defaultValue
+    }
+  }
+}, { deep: true })
+
 // --- 5. 生命周期与持久化 ---
 
 const STORAGE_KEY = 'SCHEMA_EDITOR_DRAFT'
+const GLOBAL_CONFIG_KEY = 'SCHEMA_EDITOR_GLOBAL_CONFIG'
 
 /**
  * 挂载时加载本地草稿
@@ -486,17 +468,62 @@ onMounted(() => {
   if (draft) {
     try {
       fields.value = JSON.parse(draft)
+      initHistory(fields.value) // 初始化历史记录
     } catch (e) {
       console.error('加载草稿失败', e)
     }
+  } else {
+    initHistory([]) // 初始化空历史
   }
+
+  const globalConfigDraft = localStorage.getItem(GLOBAL_CONFIG_KEY)
+  if (globalConfigDraft) {
+    try {
+      globalConfig.value = JSON.parse(globalConfigDraft)
+    } catch (e) {
+      console.error('加载全局配置失败', e)
+    }
+  }
+
+  // 监听快捷键
+  window.addEventListener('keydown', handleKeydown)
 })
+
+import { onUnmounted } from 'vue'
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
+/**
+ * 监听快捷键 (Ctrl+Z / Cmd+Z)
+ */
+const handleKeydown = (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault()
+    if (e.shiftKey) {
+      redo()
+    } else {
+      undo()
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+    e.preventDefault()
+    redo()
+  }
+}
 
 /**
  * 字段列表变化时自动保存草稿
  */
 watch(fields, (newVal) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
+}, { deep: true })
+
+/**
+ * 全局配置变化时自动保存
+ */
+watch(globalConfig, (newVal) => {
+  localStorage.setItem(GLOBAL_CONFIG_KEY, JSON.stringify(newVal))
 }, { deep: true })
 
 /**
@@ -507,18 +534,6 @@ watch(previewMode, (mode) => {
     applyDefaultValues()
   }
 })
-
-/**
- * 监听选中字段的约束变化，实时更新预览值
- */
-watch(() => selectedField.value?.constraintInfo, () => {
-  if (selectedField.value) {
-    const normalized = normalizeField(selectedField.value, previewMode.value)
-    if (normalized.logic.defaultValue !== undefined) {
-      previewValues.value[selectedField.value.attributeNum] = normalized.logic.defaultValue
-    }
-  }
-}, { deep: true })
 </script>
 
 <style scoped>
@@ -827,5 +842,9 @@ watch(() => selectedField.value?.constraintInfo, () => {
   color: #1890ff;
   font-size: 13px;
   text-align: center;
+}
+.global-config-panel {
+  padding: 16px;
+  overflow-y: auto;
 }
 </style>

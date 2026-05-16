@@ -1,6 +1,6 @@
 <template>
   <div class="a-schema-form">
-    <div class="a-schema-form__container">
+    <div class="a-schema-form__container" :style="{ maxWidth: globalConfig?.maxWidth ? `${globalConfig.maxWidth}px` : '800px' }">
       <!-- 
         1. 头部插槽
       -->
@@ -13,7 +13,15 @@
       <!-- 
         2. 动态表单容器
       -->
-      <a-form ref="formRef" class="a-schema-form__form" layout="vertical" :model="formModel" :rules="rules">
+      <a-form 
+        ref="formRef" 
+        class="a-schema-form__form" 
+        :layout="globalConfig?.layout || 'vertical'" 
+        :size="globalConfig?.size || 'middle'"
+        :label-col="globalConfig?.layout === 'horizontal' ? (globalConfig?.labelCol || { style: { width: '120px' } }) : undefined"
+        :model="formModel" 
+        :rules="rules"
+      >
         <section v-for="group in visibleGroups" :key="group.name" class="a-schema-form__group">
           <h3>{{ group.name }}</h3>
           <div class="a-schema-form__grid">
@@ -49,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField } from './types'
+import type { BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField, FormGlobalConfig } from './types'
 import { createInitialModel, createSubmitValues, groupFields } from './utils'
 import BusinessField from './BusinessField.vue'
 
@@ -72,6 +80,7 @@ const props = withDefaults(
     optionProvider?: OptionProvider
     dictionaries?: Record<string, FieldOption[]> // 外部传入的字典数据
     forceShowAll?: boolean // 是否强制显示所有字段（设计器使用）
+    globalConfig?: FormGlobalConfig // 全局表单配置
   }>(),
   {
     title: '',
@@ -80,6 +89,12 @@ const props = withDefaults(
     initialValues: () => ({}),
     dictionaries: () => ({}),
     forceShowAll: false,
+    globalConfig: () => ({
+      layout: 'vertical',
+      size: 'middle',
+      labelCol: { style: { width: 120 } },
+      maxWidth: 800
+    })
   }
 )
 
@@ -95,14 +110,59 @@ const formRef = ref()
 const formModel = reactive<FormModel>({})
 
 /**
- * 【数据计算流】
+ * 计算字段的动态表达式 (目前支持控制 hidden 属性)
+ * @param expression JS 表达式，例如 `$form.status === '1'`
+ * @param formModel 当前表单数据
  */
-const groups = computed(() => groupFields(props.fields, props.mode, props.dictionaries, props.forceShowAll))
+const evaluateExpression = (expression: string | null | undefined, formModel: FormModel): boolean => {
+  if (!expression) return false
+  try {
+    // 构造一个沙箱函数执行表达式，传入 $form 变量
+    const fn = new Function('$form', `return !!(${expression})`)
+    return fn(formModel)
+  } catch (e) {
+    console.warn(`[ASchemaForm] 表达式执行失败: ${expression}`, e)
+    return false
+  }
+}
+
+/**
+ * 【数据计算流】
+ * 依赖于 fields, mode, dictionaries, forceShowAll 以及 formModel 的变化
+ */
+const groups = computed(() => {
+  const baseGroups = groupFields(props.fields, props.mode, props.dictionaries, props.forceShowAll)
+  
+  // 第二遍遍历：执行动态联动逻辑
+  // 即使在 forceShowAll = true 时，我们也计算 hidden，因为设计器需要展示“已隐藏”的角标
+  baseGroups.forEach(group => {
+    group.fields.forEach(field => {
+      // 如果字段配置了联动表达式
+      if (field.logic.expression) {
+        // 表达式返回 true 时，表示条件满足（即显示）
+        const isVisible = evaluateExpression(field.logic.expression, formModel)
+        field.logic.hidden = !isVisible
+      }
+    })
+  })
+  
+  return baseGroups
+})
 
 // 过滤掉不可见分组
-const visibleGroups = computed(() => 
-  groups.value.filter(g => g.fields.length > 0)
-)
+const visibleGroups = computed(() => {
+  if (props.forceShowAll) {
+    // 设计模式下（forceShowAll=true），展示所有分组，不因为隐藏逻辑而过滤掉分组
+    return groups.value.filter(g => g.fields.length > 0)
+  }
+  return groups.value
+    .map(g => ({
+      ...g,
+      // 在运行模式下，过滤掉 logic.hidden 为 true 的字段
+      fields: g.fields.filter(f => !f.logic.hidden)
+    }))
+    .filter(g => g.fields.length > 0)
+})
 
 /**
  * 【动态校验规则】
@@ -111,7 +171,8 @@ const rules = computed(() => {
   const result: Record<string, FormRule[]> = {}
   visibleGroups.value.forEach(g => {
     g.fields.forEach(f => {
-      if (f.props.required) {
+      // 只有在字段未隐藏的情况下才应用必填校验
+      if (f.props.required && !f.logic.hidden) {
         result[f.attributeNum] = [{ required: true, message: `请输入${f.displayName}`, trigger: 'change' }]
       }
     })
@@ -123,13 +184,21 @@ const rules = computed(() => {
  * 初始化表单数据
  */
 const fillForm = (groupsValue: BusinessFieldGroup[]): void => {
-  Object.keys(formModel).forEach(key => delete formModel[key])
+  // 不再粗暴地清空整个 formModel，这会导致已输入的数据在模式切换时丢失
+  // 而是只增量更新初始值，或者清理不在 schema 中的数据
   const base = createInitialModel(groupsValue)
   const final = { ...base, ...props.initialValues }
-  Object.keys(final).forEach(key => (formModel[key] = final[key]))
+  
+  // 保留用户已经输入的值，只在不存在时才用 final 里的默认值覆盖
+  Object.keys(final).forEach(key => {
+    if (formModel[key] === undefined) {
+      formModel[key] = final[key]
+    }
+  })
 }
 
 const resetForm = (): void => {
+  Object.keys(formModel).forEach(key => delete formModel[key])
   fillForm(groups.value)
 }
 
@@ -152,8 +221,11 @@ const submitForm = async (): Promise<FormModel | undefined> => {
 }
 
 watch(
-  [groups, () => props.initialValues],
-  ([nextGroups]) => fillForm(nextGroups),
+  [() => props.fields, () => props.mode, () => props.initialValues, () => props.forceShowAll],
+  () => {
+    // 强制触发一次 groups 重新计算所需的重置操作，或者让 fillForm 处理
+    fillForm(groups.value)
+  },
   { immediate: true, deep: true }
 )
 
@@ -175,11 +247,12 @@ defineExpose({ resetForm, submitForm })
 }
 .a-schema-form__container {
   width: 100%;
-  max-width: 800px; /* 限制最大宽度，预留左右空间 */
+  /* max-width 由行内样式动态控制 */
   background: #ffffff;
   padding: 40px;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: max-width 0.3s ease;
 }
 .a-schema-form__header {
   display: flex;
