@@ -8,6 +8,7 @@
       </div>
       <div class="header-actions">
         <a-space>
+          <a-button danger @click="clearCanvas">清空画布</a-button>
           <a-button @click="importJson">导入 JSON</a-button>
           <a-button type="primary" @click="exportJson">导出 JSON</a-button>
         </a-space>
@@ -23,6 +24,8 @@
             v-for="item in availableComponents" 
             :key="item.type" 
             class="component-item"
+            draggable="true"
+            @dragstart="handleDragStartFromLibrary($event, item.type)"
             @click="addComponent(item.type)"
           >
             <span class="icon">{{ item.icon }}</span>
@@ -42,12 +45,16 @@
             </a-radio-group>
           </div>
           
-          <div class="preview-canvas">
+          <div 
+            class="preview-canvas"
+            @dragover.prevent
+            @drop="handleDropOnCanvas"
+          >
             <div 
               v-if="fields.length === 0" 
               class="empty-tip"
             >
-              请从左侧点击组件添加字段
+              请从左侧拖拽或点击组件添加字段
             </div>
             
             <!-- 这里直接使用我们的组件进行预览 -->
@@ -61,7 +68,7 @@
               <!-- 增加一些交互，让预览中的元素可点击 -->
               <template #header>
                 <div class="canvas-header">
-                  <span>点击下方卡片可配置字段属性</span>
+                  <span>提示：可拖拽左侧组件入库，或在画布内拖拽排序</span>
                 </div>
               </template>
 
@@ -73,10 +80,23 @@
                     active: selectedField && selectedField.bid === field.bid,
                     'is-designer': previewMode !== 'view',
                     'is-hidden': field.logic.hidden,
-                    'is-readonly': field.props.disabled
+                    'is-readonly': field.props.disabled,
+                    'is-dragging': draggingBid === field.bid,
+                    'drop-over-top': overBid === field.bid && overPosition === 'top',
+                    'drop-over-bottom': overBid === field.bid && overPosition === 'bottom'
                   }"
+                  :draggable="previewMode !== 'view'"
+                  @dragstart="handleDragStartFromCanvas($event, field.bid)"
+                  @dragover.prevent="handleDragOverField($event, field.bid)"
+                  @dragleave="handleDragLeave"
+                  @drop.stop="handleDropOnField($event, field.bid)"
+                  @dragend="handleDragEnd"
                   @click="previewMode !== 'view' && handleFieldSelect(field)"
                 >
+                  <!-- 占位符提示线 -->
+                  <div class="drop-placeholder-line top"></div>
+                  <div class="drop-placeholder-line bottom"></div>
+
                   <!-- 顶部操作栏：预览模式下隐藏 -->
                   <div v-if="previewMode !== 'view'" class="field-card-actions">
                     <span v-if="field.logic.hidden" class="status-badge hidden">已隐藏</span>
@@ -95,6 +115,12 @@
                         :disabled="isLastField(field.bid)"
                       >
                         ↓
+                      </a-button>
+                      <a-button 
+                        title="克隆"
+                        @click.stop="cloneField(field.bid)"
+                      >
+                        克隆
                       </a-button>
                       <a-button 
                         danger
@@ -252,6 +278,7 @@
     >
       <pre class="json-preview">{{ JSON.stringify(fields, null, 2) }}</pre>
       <template #footer>
+        <a-button @click="downloadJson">下载 JSON 文件</a-button>
         <a-button type="primary" @click="copyJson">复制到剪贴板</a-button>
         <a-button @click="showExportModal = false">关闭</a-button>
       </template>
@@ -274,10 +301,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import ASchemaForm from '../../components/a-schema-form/index.vue'
-import type { RawBusinessField, FormMode, RawConstraint, BusinessField } from '../../components/a-schema-form/types'
+import type { RawBusinessField, FormMode, RawConstraint } from '../../components/a-schema-form/types'
 import { normalizeField } from '../../components/a-schema-form/utils'
+
+// 导入 Hook
+import { useDesignerDrag } from './hooks/useDesignerDrag'
+import { useDesignerFields } from './hooks/useDesignerFields'
+import { useFieldProperties } from './hooks/useFieldProperties'
 
 // 导入所有基础组件用于预览
 import FieldInput from '../../components/a-schema-form/components/FieldInput.vue'
@@ -313,237 +345,103 @@ const componentMap: Record<string, any> = {
   slider: FieldSlider
 }
 
-// 2. 状态管理
-const fields = ref<RawBusinessField[]>([])
-const selectedIndex = ref<number>(-1)
+// 2. 状态管理与逻辑抽离
+
+// A. 字段管理 (列表增删改查)
+const {
+  fields,
+  selectedIndex,
+  selectedField,
+  isIdDuplicated,
+  createNewField,
+  addComponent,
+  removeComponent,
+  removeFieldByBid,
+  handleFieldSelect,
+  cloneField,
+  moveField,
+  clearCanvas,
+  isFirstField,
+  isLastField
+} = useDesignerFields()
+
+// B. 拖拽交互 (库拖入、画布排序、腾空效果)
+const {
+  draggingBid,
+  draggingType,
+  overBid,
+  overPosition,
+  handleDragStartFromLibrary,
+  handleDragStartFromCanvas,
+  handleDragOverField,
+  handleDragLeave,
+  handleDragEnd,
+  handleDropOnCanvas,
+  handleDropOnField
+} = useDesignerDrag(fields, selectedIndex, createNewField)
+
+// C. 属性配置 (约束、权限、数据源)
+const {
+  dataSourceType,
+  urlPath,
+  urlValueKey,
+  urlLabelKey,
+  isFieldRequired,
+  fieldDefaultValue,
+  fieldEnumOptions
+} = useFieldProperties(selectedField)
+
+// D. 本地预览相关状态
 const previewMode = ref<FormMode>('create')
+const previewValues = ref<Record<string, any>>({})
+
+// E. 弹窗相关状态
 const showExportModal = ref(false)
 const showImportModal = ref(false)
 const importRawJson = ref('')
-const previewValues = ref<Record<string, any>>({})
 
-// 数据源相关状态
-const dataSourceType = ref<'enum' | 'url'>('enum')
-const urlPath = ref('')
-const urlValueKey = ref('')
-const urlLabelKey = ref('')
+// --- 3. 导入导出逻辑 ---
 
-// 3. 计算属性
-const selectedField = computed(() => {
-  if (selectedIndex.value >= 0 && selectedIndex.value < fields.value.length) {
-    return fields.value[selectedIndex.value]
-  }
-  return null
-})
-
-const isIdDuplicated = computed(() => {
-  if (!selectedField.value) return false
-  const id = selectedField.value.attributeNum
-  return fields.value.some((f, i) => f.attributeNum === id && i !== selectedIndex.value)
-})
-
-const handleFieldSelect = (field: RawBusinessField) => {
-  const index = fields.value.findIndex(f => f.bid === field.bid)
-  selectedIndex.value = index
-}
-
-const removeFieldByBid = (bid: string) => {
-  const index = fields.value.findIndex(f => f.bid === bid)
-  if (index >= 0) {
-    removeComponent(index)
-  }
-}
-
-const moveField = (bid: string, direction: 'up' | 'down') => {
-  const index = fields.value.findIndex(f => f.bid === bid)
-  if (index < 0) return
-
-  const targetIndex = direction === 'up' ? index - 1 : index + 1
-  if (targetIndex < 0 || targetIndex >= fields.value.length) return
-
-  // 1. 交换数组元素位置（控制视图显示顺序）
-  const temp = fields.value[index]
-  fields.value[index] = fields.value[targetIndex]
-  fields.value[targetIndex] = temp
-
-  // 2. 重要：同步更新 sortOrder 权重，确保导出数据也符合顺序
-  fields.value.forEach((f, i) => {
-    f.sortOrder = i + 1
-  })
-
-  // 3. 同步更新选中索引
-  if (selectedIndex.value === index) {
-    selectedIndex.value = targetIndex
-  } else if (selectedIndex.value === targetIndex) {
-    selectedIndex.value = index
-  }
-}
-
-const isFirstField = (bid: string) => {
-  return fields.value.length > 0 && fields.value[0].bid === bid
-}
-
-const isLastField = (bid: string) => {
-  return fields.value.length > 0 && fields.value[fields.value.length - 1].bid === bid
-}
-
-// 4. 辅助：解析和构造 constraintInfo
-const isFieldRequired = computed({
-  get: () => {
-    if (!selectedField.value?.constraintInfo) return false
-    try {
-      const constraints = JSON.parse(selectedField.value.constraintInfo) as RawConstraint[]
-      return constraints.some(c => c.key === 'required' && c.value === 1)
-    } catch {
-      return false
-    }
-  },
-  set: (val: boolean) => {
-    updateConstraint('required', val ? 1 : 0)
-  }
-})
-
-const fieldDefaultValue = computed({
-  get: () => {
-    if (!selectedField.value?.constraintInfo) return ''
-    try {
-      const constraints = JSON.parse(selectedField.value.constraintInfo) as RawConstraint[]
-      const found = constraints.find(c => c.key === 'default_value')
-      return found ? String(found.value) : ''
-    } catch {
-      return ''
-    }
-  },
-  set: (val: string) => {
-    updateConstraint('default_value', val)
-  }
-})
-
-const fieldEnumOptions = computed({
-  get: () => {
-    if (!selectedField.value?.constraintInfo) return ''
-    try {
-      const constraints = JSON.parse(selectedField.value.constraintInfo) as RawConstraint[]
-      const found = constraints.find(c => c.key === 'enum')
-      return found ? String(found.value) : ''
-    } catch {
-      return ''
-    }
-  },
-  set: (val: string) => {
-    updateConstraint('enum', val)
-    if (val) {
-      updateConstraint('url', null)
-    }
-  }
-})
-
-// 监听选中字段切换，同步数据源 UI 状态
-watch(selectedField, (newField) => {
-  if (!newField) return
-  try {
-    const constraints = JSON.parse(newField.constraintInfo || '[]') as RawConstraint[]
-    const urlConstraint = constraints.find(c => c.key === 'url')
-    
-    if (urlConstraint) {
-      dataSourceType.value = 'url'
-      const raw = String(urlConstraint.value)
-      const [pathPart, keysPart] = raw.split(' / ')
-      urlPath.value = pathPart || ''
-      if (keysPart) {
-        const [v, l] = keysPart.split('&')
-        urlValueKey.value = v || ''
-        urlLabelKey.value = l || ''
-      }
-    } else {
-      dataSourceType.value = 'enum'
-      urlPath.value = ''
-      urlValueKey.value = ''
-      urlLabelKey.value = ''
-    }
-  } catch {
-    dataSourceType.value = 'enum'
-  }
-}, { immediate: true })
-
-// 监听 URL 部件变化，同步到约束
-watch([urlPath, urlValueKey, urlLabelKey], () => {
-  if (dataSourceType.value === 'url' && urlPath.value) {
-    const value = `${urlPath.value} / ${urlValueKey.value}&${urlLabelKey.value}`
-    updateConstraint('url', value)
-    updateConstraint('enum', null)
-  }
-})
-
-const updateConstraint = (key: string, value: any) => {
-  if (!selectedField.value) return
-  
-  let constraints: RawConstraint[] = []
-  try {
-    constraints = JSON.parse(selectedField.value.constraintInfo || '[]')
-  } catch (e) {
-    constraints = []
-  }
-
-  const index = constraints.findIndex(c => c.key === key)
-  if (index >= 0) {
-    if (value === null || value === '' || (key === 'required' && value === 0)) {
-      constraints.splice(index, 1)
-    } else {
-      constraints[index].value = value
-    }
-  } else if (value !== null && value !== '') {
-    constraints.push({ 
-      key, 
-      value, 
-      lableName: key === 'required' ? '必填' : key === 'enum' ? '枚举' : key === 'url' ? '数据源' : '默认值' 
-    })
-  }
-
-  selectedField.value.constraintInfo = constraints.length > 0 ? JSON.stringify(constraints) : null
-}
-
-// 5. 方法
-const addComponent = (type: string) => {
-  const newField: RawBusinessField = {
-    bid: Date.now().toString(),
-    attributeNum: `field_${fields.value.length + 1}`,
-    displayName: `新字段_${fields.value.length + 1}`,
-    controlStyle: type,
-    sortOrder: fields.value.length + 1,
-    constraintInfo: null,
-    createState: 'RW',
-    editState: 'RW',
-    viewState: 'R',
-    groupTag: '基础信息'
-  }
-  fields.value.push(newField)
-  selectedIndex.value = fields.value.length - 1
-}
-
-const removeComponent = (index: number) => {
-  fields.value.splice(index, 1)
-  if (selectedIndex.value === index) {
-    selectedIndex.value = -1
-  } else if (selectedIndex.value > index) {
-    selectedIndex.value--
-  }
-}
-
+/**
+ * 打开导出 JSON 弹窗
+ */
 const exportJson = () => {
   showExportModal.value = true
 }
 
+/**
+ * 复制 Schema 到剪贴板
+ */
 const copyJson = () => {
   navigator.clipboard.writeText(JSON.stringify(fields.value, null, 2))
   alert('已复制到剪贴板')
 }
 
+/**
+ * 下载 Schema 为 .json 文件
+ */
+const downloadJson = () => {
+  const data = JSON.stringify(fields.value, null, 2)
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `schema_${Date.now()}.json`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * 打开导入 JSON 弹窗
+ */
 const importJson = () => {
   importRawJson.value = ''
   showImportModal.value = true
 }
 
+/**
+ * 执行 JSON 导入
+ */
 const handleImport = () => {
   try {
     const data = JSON.parse(importRawJson.value)
@@ -562,13 +460,13 @@ const handleImport = () => {
   }
 }
 
+// --- 4. 预览与业务逻辑 ---
+
 /**
- * 核心逻辑：应用默认值到表单
- * 遍历所有字段，提取其约束中的 default_value 并填充到 previewValues
+ * 应用字段的默认值到预览表单
  */
 const applyDefaultValues = () => {
   fields.value.forEach(f => {
-    // 使用组件库内置的归一化逻辑获取默认值
     const normalized = normalizeField(f, previewMode.value)
     if (normalized.logic.defaultValue !== undefined && normalized.logic.defaultValue !== null) {
       previewValues.value[f.attributeNum] = normalized.logic.defaultValue
@@ -576,11 +474,13 @@ const applyDefaultValues = () => {
   })
 }
 
-import { onMounted } from 'vue'
+// --- 5. 生命周期与持久化 ---
 
-// 持久化逻辑
 const STORAGE_KEY = 'SCHEMA_EDITOR_DRAFT'
 
+/**
+ * 挂载时加载本地草稿
+ */
 onMounted(() => {
   const draft = localStorage.getItem(STORAGE_KEY)
   if (draft) {
@@ -592,18 +492,25 @@ onMounted(() => {
   }
 })
 
+/**
+ * 字段列表变化时自动保存草稿
+ */
 watch(fields, (newVal) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
 }, { deep: true })
 
-// 监听预览模式变化，自动填充默认值
+/**
+ * 切换预览模式时自动填充默认值
+ */
 watch(previewMode, (mode) => {
   if (mode === 'view' || mode === 'edit') {
     applyDefaultValues()
   }
 })
 
-// 监听字段属性中的默认值修改，实时同步到预览
+/**
+ * 监听选中字段的约束变化，实时更新预览值
+ */
 watch(() => selectedField.value?.constraintInfo, () => {
   if (selectedField.value) {
     const normalized = normalizeField(selectedField.value, previewMode.value)
@@ -792,6 +699,54 @@ watch(() => selectedField.value?.constraintInfo, () => {
   border: 1px solid #1890ff;
   background: #f0f7ff;
   z-index: 10;
+}
+
+/* 拖拽腾空效果 */
+.field-item-card.drop-over-top {
+  margin-top: 48px; /* 腾出空间 */
+}
+
+.field-item-card.drop-over-bottom {
+  margin-bottom: 48px; /* 腾出空间 */
+}
+
+/* 占位符提示线 */
+.drop-placeholder-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #1890ff;
+  display: none;
+  z-index: 20;
+  border-radius: 2px;
+}
+
+.drop-placeholder-line::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 9px;
+  height: 9px;
+  background: #1890ff;
+  border-radius: 50%;
+}
+
+.drop-over-top .drop-placeholder-line.top {
+  display: block;
+  top: -24px;
+}
+
+.drop-over-bottom .drop-placeholder-line.bottom {
+  display: block;
+  bottom: -24px;
+}
+
+.field-item-card.is-dragging {
+  opacity: 0.4;
+  border: 1px dashed #1890ff;
+  background: #e6f7ff;
 }
 
 .field-item-card.is-hidden {
