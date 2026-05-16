@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import type { RawBusinessField } from '../../../components/a-schema-form/types'
-import type { DesignerState } from './useDesignerFields'
+import { createDesignerState, type DesignerState } from './useDesignerFields'
 
 /**
  * 设计器拖拽逻辑 Hook
@@ -25,6 +25,24 @@ export const useDesignerDrag = (
   let pendingHoverState: { bid: string | null; position: 'top' | 'bottom' | null } | null = null
 
   /**
+   * 判定位置：简单归一化，确保一个间隙只有一根线。
+   * 逻辑：下半部自动归类到下一个组件的“上方”，除非是最后一个组件。
+   */
+  const resolveHoverPosition = (bid: string, offsetY: number, height: number) => {
+    const isTop = offsetY < height / 2
+    if (isTop) return { bid, position: 'top' as const }
+
+    // 下半部判定：找下一个组件
+    const index = fields.value.findIndex(f => f.bid === bid)
+    if (index >= 0 && index < fields.value.length - 1) {
+      return { bid: fields.value[index + 1].bid, position: 'top' as const }
+    }
+
+    // 最后一个组件的下半部
+    return { bid, position: 'bottom' as const }
+  }
+
+  /**
    * 仅在 hover 状态真实变化时提交，减少 dragover 高频触发造成的重复渲染。
    */
   const syncHoverState = (bid: string | null, position: 'top' | 'bottom' | null) => {
@@ -34,7 +52,7 @@ export const useDesignerDrag = (
   }
 
   /**
-   * hover 状态按帧更新，避免每次 dragover 都触发响应式写入。
+   * hover 状态按帧更新
    */
   const scheduleHoverState = (bid: string | null, position: 'top' | 'bottom' | null) => {
     pendingHoverState = { bid, position }
@@ -51,9 +69,6 @@ export const useDesignerDrag = (
 
   // --- 核心方法 ---
 
-  /**
-   * 重置所有拖拽状态
-   */
   const handleDragEnd = () => {
     if (hoverFrameId) {
       window.cancelAnimationFrame(hoverFrameId)
@@ -65,49 +80,26 @@ export const useDesignerDrag = (
     syncHoverState(null, null)
   }
 
-  /**
-   * 从组件库开始拖拽
-   */
-  const handleDragStartFromLibrary = (e: DragEvent, type: string) => {
+  const handleDragStartFromLibrary = (_e: DragEvent, type: string) => {
     draggingType.value = type
     draggingBid.value = null
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'copy'
-    }
   }
 
-  /**
-   * 从画布内部开始拖拽
-   */
-  const handleDragStartFromCanvas = (e: DragEvent, bid: string) => {
+  const handleDragStartFromCanvas = (_e: DragEvent, bid: string) => {
     draggingBid.value = bid
     draggingType.value = null
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move'
-    }
   }
 
-  /**
-   * 鼠标在字段上方移动，计算腾空位置
-   */
   const handleDragOverField = (e: DragEvent, bid: string) => {
     // 如果拖拽的是自己，则不触发腾空
-    if (draggingBid.value === bid) {
-      scheduleHoverState(null, null)
-      return
-    }
+    if (draggingBid.value === bid) return
     
     const target = e.currentTarget as HTMLElement
     const rect = target.getBoundingClientRect()
     const offset = e.clientY - rect.top
     
-    // 以中心线为界，判断是上半部分还是下半部分
-    const nextPosition = offset < rect.height / 2 ? 'top' : 'bottom'
-    scheduleHoverState(bid, nextPosition)
-    
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = draggingType.value ? 'copy' : 'move'
-    }
+    const { bid: finalBid, position } = resolveHoverPosition(bid, offset, rect.height)
+    scheduleHoverState(finalBid, position)
 
     // 阻止冒泡，避免触发画布的 dragover
     e.stopPropagation()
@@ -132,56 +124,32 @@ export const useDesignerDrag = (
   }
 
   /**
-   * 在画布空白区域释放 (通常是追加到末尾)
+   * 在画布空白区域释放
+   * 用户要求：如果没有命中具体字段，则“回到原位”，即不进行任何操作。
    */
   const handleDropOnCanvas = () => {
-    // 只有在没有命中具体字段时，才执行追加逻辑
-    if (overBid.value) return
-
-    if (draggingType.value) {
-      // 从库拖拽新增到末尾
-      const newField = createNewField(draggingType.value)
-      updateState((state) => ({
-        fields: [...state.fields, newField].map((field, index) => ({
-          ...field,
-          sortOrder: index + 1
-        })),
-        selectedIndex: state.fields.length
-      }))
-    } else if (draggingBid.value) {
-      // 画布内移动到末尾
-      updateState((state) => {
-        const sourceIndex = state.fields.findIndex(f => f.bid === draggingBid.value)
-        if (sourceIndex < 0) return state
-
-        const nextFields = [...state.fields]
-        const [removed] = nextFields.splice(sourceIndex, 1)
-        nextFields.push(removed)
-        return {
-          fields: nextFields.map((field, index) => ({
-            ...field,
-            sortOrder: index + 1
-          })),
-          selectedIndex: nextFields.length - 1
-        }
-      })
-    }
-
     handleDragEnd()
   }
 
   /**
    * 在具体字段上释放
+   * 用户要求：不要根据鼠标位置重算，要根据当前“激活的提示线”位置插入。
    */
-  const handleDropOnField = (_e: DragEvent, targetBid: string) => {
-    // 如果是拖拽到自己身上，且没有明确的腾空位置（即不是拖拽到自己的边缘，但逻辑上拖拽到自己应该不触发移动）
-    if (draggingBid.value === targetBid) {
+  const handleDropOnField = (_e: DragEvent, _targetBid: string) => {
+    // 核心逻辑：直接使用 dragover 过程中实时更新并显示的 overBid 和 overPosition
+    const targetBid = overBid.value
+    const position = overPosition.value
+
+    if (!targetBid || !position) {
       handleDragEnd()
       return
     }
 
-    const targetIndex = fields.value.findIndex(f => f.bid === targetBid)
-    if (targetIndex < 0) return
+    // 如果是拖拽到自己身上，则不触发
+    if (draggingBid.value === targetBid) {
+      handleDragEnd()
+      return
+    }
 
     if (draggingType.value) {
       // 场景 A: 从库拖拽新增
@@ -190,51 +158,29 @@ export const useDesignerDrag = (
         const currentTargetIndex = state.fields.findIndex(f => f.bid === targetBid)
         if (currentTargetIndex < 0) return state
 
-        const insertIndex = overPosition.value === 'bottom' ? currentTargetIndex + 1 : currentTargetIndex
+        const insertIndex = position === 'bottom' ? currentTargetIndex + 1 : currentTargetIndex
         const nextFields = [...state.fields]
         nextFields.splice(insertIndex, 0, newField)
 
-        return {
-          fields: nextFields.map((field, index) => ({
-            ...field,
-            sortOrder: index + 1
-          })),
-          selectedIndex: insertIndex
-        }
+        return createDesignerState(nextFields, insertIndex)
       })
     } else if (draggingBid.value) {
       // 场景 B: 画布内移动
-      let shouldSkipDrop = false
-
       updateState((state) => {
         const sourceIndex = state.fields.findIndex(f => f.bid === draggingBid.value)
         const currentTargetIndex = state.fields.findIndex(f => f.bid === targetBid)
         if (sourceIndex < 0 || currentTargetIndex < 0) return state
 
-        const insertIndex = overPosition.value === 'bottom' ? currentTargetIndex + 1 : currentTargetIndex
+        const insertIndex = position === 'bottom' ? currentTargetIndex + 1 : currentTargetIndex
         const nextFields = [...state.fields]
         const [removed] = nextFields.splice(sourceIndex, 1)
+        
+        // 计算最终插入位置，需要考虑删除自己后索引的变化
         const finalTargetIndex = sourceIndex < insertIndex ? insertIndex - 1 : insertIndex
-
-        if (finalTargetIndex === sourceIndex) {
-          shouldSkipDrop = true
-          return state
-        }
-
         nextFields.splice(finalTargetIndex, 0, removed)
-        return {
-          fields: nextFields.map((field, index) => ({
-            ...field,
-            sortOrder: index + 1
-          })),
-          selectedIndex: finalTargetIndex
-        }
+        
+        return createDesignerState(nextFields, finalTargetIndex)
       })
-
-      if (shouldSkipDrop) {
-        handleDragEnd()
-        return
-      }
     }
     
     handleDragEnd()

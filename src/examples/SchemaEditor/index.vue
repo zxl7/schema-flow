@@ -122,6 +122,7 @@
 
               <!-- 使用 field-item 插槽，将 Label 和组件整体包裹在卡片中 -->
               <template #field-item="{ field, formModel }">
+                <!-- 核心卡片容器 -->
                 <div 
                   class="field-item-card" 
                   :class="{ 
@@ -129,9 +130,7 @@
                     'is-designer': isDesignerMode,
                     'is-hidden': field.logic.hidden,
                     'is-readonly': field.props.disabled,
-                    'is-dragging': isDesignerMode && draggingBid === field.bid,
-                    'drop-over-top': isDesignerMode && overBid === field.bid && overPosition === 'top',
-                    'drop-over-bottom': isDesignerMode && overBid === field.bid && overPosition === 'bottom'
+                    'is-dragging': isDesignerMode && draggingBid === field.bid
                   }"
                   :draggable="isDesignerMode"
                   @dragstart="isDesignerMode && handleDragStartFromCanvas($event, field.bid)"
@@ -141,62 +140,68 @@
                   @dragend="isDesignerMode && handleDragEnd()"
                   @click="isDesignerMode && handleFieldSelect(field.bid)"
                 >
-                  <!-- 占位符提示线 -->
-                  <div v-if="isDesignerMode" class="drop-placeholder-line top"></div>
-                  <div v-if="isDesignerMode" class="drop-placeholder-line bottom"></div>
+                  <!-- 1. 唯一提示线：通过 absolute 挂在卡片上，要么在 top 要么在 bottom -->
+                  <div
+                    v-if="isDesignerMode && overBid === field.bid"
+                    class="drop-indicator-line"
+                    :class="overPosition"
+                  >
+                    <div class="dot"></div>
+                    <div class="line"></div>
+                  </div>
 
                   <!-- 顶部操作栏：仅设计模式可见 -->
                   <div v-if="isDesignerMode" class="field-card-actions">
-                    <span v-if="field.logic.hidden" class="status-badge hidden">已隐藏</span>
-                    <span v-if="field.props.disabled" class="status-badge readonly">只读</span>
-                    <a-button-group size="small">
-                      <a-button 
-                        title="上移"
-                        @click.stop="moveField(field.bid, 'up')"
-                        :disabled="isFirstField(field.bid)"
-                      >
-                        ↑
-                      </a-button>
-                      <a-button 
-                        title="下移"
-                        @click.stop="moveField(field.bid, 'down')"
-                        :disabled="isLastField(field.bid)"
-                      >
-                        ↓
-                      </a-button>
-                      <a-button 
-                        title="克隆"
-                        @click.stop="cloneField(field.bid)"
-                      >
-                        克隆
-                      </a-button>
-                      <a-button 
-                        danger
-                        title="删除"
-                        @click.stop="removeFieldByBid(field.bid)"
-                      >
-                        删除
-                      </a-button>
-                    </a-button-group>
-                  </div>
+                      <span v-if="field.logic.hidden" class="status-badge hidden">已隐藏</span>
+                      <span v-if="field.props.disabled" class="status-badge readonly">只读</span>
+                      <a-button-group size="small">
+                        <a-button 
+                          title="上移"
+                          @click.stop="moveField(field.bid, 'up')"
+                          :disabled="isFirstField(field.bid)"
+                        >
+                          ↑
+                        </a-button>
+                        <a-button 
+                          title="下移"
+                          @click.stop="moveField(field.bid, 'down')"
+                          :disabled="isLastField(field.bid)"
+                        >
+                          ↓
+                        </a-button>
+                        <a-button 
+                          title="克隆"
+                          @click.stop="cloneField(field.bid)"
+                        >
+                          克隆
+                        </a-button>
+                        <a-button 
+                          danger
+                          title="删除"
+                          @click.stop="removeFieldByBid(field.bid)"
+                        >
+                          删除
+                        </a-button>
+                      </a-button-group>
+                    </div>
 
-                  <!-- 模拟 a-form-item 的布局 -->
-                  <div class="field-card-content">
-                    <div class="field-card-label">
-                      <span v-if="field.props.required" class="required-star">*</span>
-                      {{ field.displayName }}
-                    </div>
-                    <div class="field-card-component">
-                      <component 
-                        :is="componentMap[field.uiType]"
-                        v-bind="field.props"
-                        v-model:model-value="formModel[field.attributeNum]"
-                        :field="field"
-                        :form-model="formModel"
-                      />
+                    <!-- 模拟 a-form-item 的布局 -->
+                    <div class="field-card-content">
+                      <div class="field-card-label">
+                        <span v-if="field.props.required" class="required-star">*</span>
+                        {{ field.displayName }}
+                      </div>
+                      <div class="field-card-component">
+                        <component 
+                          :is="componentMap[field.uiType]"
+                          v-bind="field.props"
+                          v-model:model-value="formModel[field.attributeNum]"
+                          :field="field"
+                          :form-model="formModel"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
               </template>
             </a-schema-form>
           </div>
@@ -693,44 +698,44 @@ watch(globalConfig, (newVal) => {
   z-index: 10;
 }
 
-/* 拖拽命中时仅提升层级，不改动布局，避免 hover 区域来回抖动 */
-.field-item-card.drop-over-top,
-.field-item-card.drop-over-bottom {
-  z-index: 12;
-}
-
-/* 占位符提示线 */
-.drop-placeholder-line {
+/* 插入指示器容器：绝对定位在组件之间的间隙中心 */
+.drop-indicator-line {
   position: absolute;
   left: 0;
   right: 0;
   height: 3px;
-  background: #1890ff;
-  display: none;
-  z-index: 20;
-  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  z-index: 100;
   pointer-events: none;
+  /* 默认在组件上方间隙中心 (12px 间隙 / 2 = 6px, 线厚度 3px / 2 = 1.5px, 所以 top 为 -7.5px) */
+  top: -7.5px;
 }
 
-.drop-placeholder-line::after {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: -3px;
-  width: 9px;
-  height: 9px;
+.drop-indicator-line.bottom {
+  top: auto;
+  bottom: -7.5px;
+}
+
+.drop-indicator-line .dot {
+  width: 8px;
+  height: 8px;
   background: #1890ff;
   border-radius: 50%;
+  margin-left: -4px;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(24, 144, 255, 0.5);
 }
 
-.drop-over-top .drop-placeholder-line.top {
-  display: block;
-  top: -7px;
+.drop-indicator-line .line {
+  flex: 1;
+  height: 2px;
+  background: #1890ff;
+  box-shadow: 0 0 4px rgba(24, 144, 255, 0.3);
 }
 
-.drop-over-bottom .drop-placeholder-line.bottom {
-  display: block;
-  bottom: -7px;
+.field-slot-container {
+  position: relative;
 }
 
 .field-item-card.is-dragging {

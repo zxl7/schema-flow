@@ -26,7 +26,7 @@ const normalizeSelectedIndex = (fields: RawBusinessField[], selectedIndex: numbe
  * 生成新的设计器状态。
  * 默认会顺带规范排序权重，只有纯字段 patch 场景才跳过。
  */
-const createDesignerState = (
+export const createDesignerState = (
   fields: RawBusinessField[],
   selectedIndex: number,
   shouldNormalizeSortOrder: boolean = true
