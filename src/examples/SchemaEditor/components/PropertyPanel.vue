@@ -1,7 +1,7 @@
 <template>
   <aside class="editor-sidebar right">
     <div class="sidebar-title">属性配置</div>
-    <div v-if="localField" class="property-panel">
+    <div v-if="selectedField" class="property-panel">
       <!-- ID 重复警告 (通过外部传入判断结果) -->
       <a-alert
         v-if="isIdDuplicated"
@@ -14,27 +14,27 @@
       <a-form layout="vertical">
         <!-- 基础配置 -->
         <a-form-item label="字段 ID (attributeNum)">
-          <a-input v-model:value="localField.attributeNum" placeholder="唯一标识，如: userName" />
+          <a-input v-model:value="attributeNum" placeholder="唯一标识，如: userName" />
         </a-form-item>
         <a-form-item label="显示名称 (displayName)">
-          <a-input v-model:value="localField.displayName" />
+          <a-input v-model:value="displayName" />
         </a-form-item>
         <a-form-item label="控件类型 (controlStyle)">
-          <a-select v-model:value="localField.controlStyle">
+          <a-select v-model:value="controlStyle">
             <a-select-option v-for="opt in availableComponents" :key="opt.type" :value="opt.type">
               {{ opt.label }}
             </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="分组名称 (groupTag)">
-          <a-input v-model:value="localField.groupTag" />
+          <a-input v-model:value="groupTag" />
         </a-form-item>
         <a-form-item label="排序权重 (sortOrder)">
-          <a-input-number v-model:value="localField.sortOrder" :min="0" />
+          <a-input-number v-model:value="sortOrder" :min="0" />
         </a-form-item>
 
         <!-- 1. 数据源配置 (仅在选择类组件显示) -->
-        <template v-if="['select', 'radio', 'checkboxGroup'].includes(localField.controlStyle)">
+        <template v-if="isOptionField">
           <a-divider>数据源配置</a-divider>
           <a-form-item label="数据源类型">
             <a-radio-group v-model:value="dataSourceType" size="small">
@@ -84,7 +84,7 @@
         <a-divider>逻辑配置 (联动)</a-divider>
         <a-form-item label="显示条件 (JS 表达式)">
           <a-textarea 
-            v-model:value="localField.logicExpression" 
+            v-model:value="logicExpression" 
             placeholder="例如: $form.field_1 === '1'" 
             :rows="2"
           />
@@ -95,21 +95,21 @@
         <a-divider>状态配置 (Permissions)</a-divider>
         <div class="state-config-grid">
           <a-form-item label="新增模式 (Create)">
-            <a-select v-model:value="localField.createState">
+            <a-select v-model:value="createState">
               <a-select-option value="RW">可读写 (RW)</a-select-option>
               <a-select-option value="R">只读 (R)</a-select-option>
               <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
             </a-select>
           </a-form-item>
           <a-form-item label="编辑模式 (Edit)">
-            <a-select v-model:value="localField.editState">
+            <a-select v-model:value="editState">
               <a-select-option value="RW">可读写 (RW)</a-select-option>
               <a-select-option value="R">只读 (R)</a-select-option>
               <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
             </a-select>
           </a-form-item>
           <a-form-item label="预览模式 (View)">
-            <a-select v-model:value="localField.viewState">
+            <a-select v-model:value="viewState">
               <a-select-option value="RW">可读写 (RW)</a-select-option>
               <a-select-option value="R">只读 (R)</a-select-option>
               <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
@@ -126,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 import type { RawBusinessField } from '../../../../components/a-schema-form/types'
 import { useFieldProperties } from '../hooks/useFieldProperties'
 
@@ -147,42 +147,51 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   /**
-   * 通知外部更新字段数据，保持 SSOT
+   * 通知外部按 patch 更新字段，保持单一数据源
    */
-  (e: 'update:field', field: RawBusinessField): void
+  (e: 'update:field', patch: Partial<RawBusinessField>): void
 }>()
 
-// 本地代理对象，用于 v-model 双向绑定
-// 当本地代理对象发生变化时，我们向外 emit 整个对象
-const localField = ref<RawBusinessField | null>(null)
+/**
+ * 单一数据源更新入口
+ * 只在字段内容真实变化时向父层抛出更新，避免形成循环写回。
+ */
+const updateSelectedField = (patch: Partial<RawBusinessField>) => {
+  if (!props.selectedField) return
+  emit('update:field', patch)
+}
 
-// 监听外部 selectedField 的变化，同步到本地代理
-watch(
-  () => props.selectedField,
-  (newField) => {
-    if (newField) {
-      // 浅拷贝一层，避免直接修改 props 报 warning
-      localField.value = { ...newField }
-    } else {
-      localField.value = null
-    }
-  },
-  { deep: true, immediate: true }
+/**
+ * 生成字段属性的双向绑定
+ * getter 只读父层数据，setter 统一走 emit，确保属性面板不持有副本状态。
+ */
+const createFieldBinding = <K extends keyof RawBusinessField>(
+  key: K,
+  fallback: RawBusinessField[K]
+) => computed({
+  get: () => props.selectedField?.[key] ?? fallback,
+  set: (value: RawBusinessField[K]) => {
+    if (!props.selectedField || props.selectedField[key] === value) return
+    updateSelectedField({ [key]: value } as Partial<RawBusinessField>)
+  }
+})
+
+const selectedFieldRef = computed(() => props.selectedField)
+const attributeNum = createFieldBinding('attributeNum', '')
+const displayName = createFieldBinding('displayName', '')
+const controlStyle = createFieldBinding('controlStyle', 'text')
+const groupTag = createFieldBinding('groupTag', '')
+const sortOrder = createFieldBinding('sortOrder', 0)
+const logicExpression = createFieldBinding('logicExpression', '')
+const createState = createFieldBinding('createState', 'RW')
+const editState = createFieldBinding('editState', 'RW')
+const viewState = createFieldBinding('viewState', 'R')
+
+const isOptionField = computed(() =>
+  ['select', 'radio', 'checkboxGroup'].includes(String(controlStyle.value))
 )
 
-// 监听本地代理的变化，向上 emit
-watch(
-  localField,
-  (newVal) => {
-    if (newVal && props.selectedField) {
-      // 为了防止无限循环，可以在这里做一次深对比，或者直接抛出
-      emit('update:field', newVal)
-    }
-  },
-  { deep: true }
-)
-
-// 提取原先的属性解析逻辑，由于 Hook 需要传入 Ref，我们将 localField 传进去
+// 提取约束配置逻辑，并统一通过 updateSelectedField 回写父层
 const {
   dataSourceType,
   urlPath,
@@ -191,7 +200,7 @@ const {
   isFieldRequired,
   fieldDefaultValue,
   fieldEnumOptions
-} = useFieldProperties(localField)
+} = useFieldProperties(selectedFieldRef, updateSelectedField)
 
 </script>
 

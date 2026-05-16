@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { RawBusinessField } from '../../../components/a-schema-form/types'
 
 /**
@@ -182,13 +182,27 @@ export const useDesignerFields = () => {
   const isLastField = (bid: string) => fields.value.length > 0 && fields.value[fields.value.length - 1].bid === bid
 
   /**
-   * 更新字段内容 (用于独立组件的 v-model 同步)
+   * 按 BID 局部更新字段
+   * 只接收 patch，确保 `fields` 是唯一数据源。
    */
-  const updateField = (updatedField: RawBusinessField) => {
-    const index = fields.value.findIndex(f => f.bid === updatedField.bid)
+  const patchFieldByBid = (bid: string, patch: Partial<RawBusinessField>) => {
+    const index = fields.value.findIndex(f => f.bid === bid)
     if (index >= 0) {
-      fields.value[index] = { ...updatedField }
+      const nextField = { ...fields.value[index], ...patch }
+      if (JSON.stringify(fields.value[index]) === JSON.stringify(nextField)) {
+        return
+      }
+      fields.value[index] = nextField
     }
+  }
+
+  /**
+   * 更新当前选中的字段
+   * 属性面板统一通过这个函数回写数据，避免维护字段副本。
+   */
+  const updateSelectedField = (patch: Partial<RawBusinessField>) => {
+    if (!selectedField.value) return
+    patchFieldByBid(selectedField.value.bid, patch)
   }
 
   return {
@@ -206,6 +220,7 @@ export const useDesignerFields = () => {
     clearCanvas,
     isFirstField,
     isLastField,
-    updateField
+    patchFieldByBid,
+    updateSelectedField
   }
 }

@@ -21,6 +21,16 @@ export const useDesignerDrag = (
   // 当前鼠标悬停的位置 (目标字段的上方或下方)
   const overPosition = ref<'top' | 'bottom' | null>(null)
 
+  /**
+   * 统一重算排序权重
+   * 返回全新的字段数组，避免对响应式数组做多次原地修改。
+   */
+  const withSortOrder = (list: RawBusinessField[]) =>
+    list.map((field, index) => ({
+      ...field,
+      sortOrder: index + 1
+    }))
+
   // --- 核心方法 ---
 
   /**
@@ -60,75 +70,115 @@ export const useDesignerDrag = (
    */
   const handleDragOverField = (e: DragEvent, bid: string) => {
     // 如果拖拽的是自己，则不触发腾空
-    if (draggingBid.value === bid) return
+    if (draggingBid.value === bid) {
+      overBid.value = null
+      overPosition.value = null
+      return
+    }
     
     const target = e.currentTarget as HTMLElement
-    // 计算鼠标与目标元素的垂直偏移量
-    // getBoundingClientRect() 返回元素的 DOM 中的矩形位置，包含元素的宽度、高度、顶部和左侧位置
     const rect = target.getBoundingClientRect()
     const offset = e.clientY - rect.top
     
     overBid.value = bid
     // 以中心线为界，判断是上半部分还是下半部分
     overPosition.value = offset < rect.height / 2 ? 'top' : 'bottom'
+    
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = draggingType.value ? 'copy' : 'move'
+    }
+
+    // 阻止冒泡，避免触发画布的 dragover
+    e.stopPropagation()
+  }
+
+  /**
+   * 鼠标在画布空白区域移动
+   */
+  const handleDragOverCanvas = (e: DragEvent) => {
+    // 进入画布空白区域时，清空当前命中的字段
+    overBid.value = null
+    overPosition.value = null
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = draggingType.value ? 'copy' : 'move'
+    }
   }
 
   /**
    * 鼠标离开字段
    */
   const handleDragLeave = () => {
-    // 这里通常不需要立即清空 overBid，因为进入下一个元素时 handleDragOverField 会更新它
+    // 离开元素时不立即清空，由父级或其它元素的 dragover 处理
   }
 
   /**
    * 在画布空白区域释放 (通常是追加到末尾)
    */
-  const handleDropOnCanvas = (e: DragEvent) => {
-    // 只有在没有命中具体字段且是从库拖拽时，才执行追加逻辑
-    if (draggingType.value && !overBid.value) {
+  const handleDropOnCanvas = () => {
+    // 只有在没有命中具体字段时，才执行追加逻辑
+    if (overBid.value) return
+
+    if (draggingType.value) {
+      // 从库拖拽新增到末尾
       const newField = createNewField(draggingType.value)
-      fields.value.push(newField)
-      selectedIndex.value = fields.value.length - 1
-      handleDragEnd()
+      const nextFields = withSortOrder([...fields.value, newField])
+      fields.value = nextFields
+      selectedIndex.value = nextFields.length - 1
+    } else if (draggingBid.value) {
+      // 画布内移动到末尾
+      const sourceIndex = fields.value.findIndex(f => f.bid === draggingBid.value)
+      if (sourceIndex >= 0) {
+        const nextFields = [...fields.value]
+        const [removed] = nextFields.splice(sourceIndex, 1)
+        nextFields.push(removed)
+        fields.value = withSortOrder(nextFields)
+        selectedIndex.value = fields.value.length - 1
+      }
     }
+
+    handleDragEnd()
   }
 
   /**
    * 在具体字段上释放
    */
-  const handleDropOnField = (e: DragEvent, targetBid: string) => {
+  const handleDropOnField = (_e: DragEvent, targetBid: string) => {
+    // 如果是拖拽到自己身上，且没有明确的腾空位置（即不是拖拽到自己的边缘，但逻辑上拖拽到自己应该不触发移动）
+    if (draggingBid.value === targetBid) {
+      handleDragEnd()
+      return
+    }
+
     const targetIndex = fields.value.findIndex(f => f.bid === targetBid)
     if (targetIndex < 0) return
-
-    // 计算最终插入位置
-    const insertIndex = overPosition.value === 'bottom' ? targetIndex + 1 : targetIndex
 
     if (draggingType.value) {
       // 场景 A: 从库拖拽新增
       const newField = createNewField(draggingType.value)
-      fields.value.splice(insertIndex, 0, newField)
+      const insertIndex = overPosition.value === 'bottom' ? targetIndex + 1 : targetIndex
+      const nextFields = [...fields.value]
+      nextFields.splice(insertIndex, 0, newField)
+      fields.value = withSortOrder(nextFields)
       selectedIndex.value = insertIndex
     } else if (draggingBid.value) {
       // 场景 B: 画布内移动
       const sourceIndex = fields.value.findIndex(f => f.bid === draggingBid.value)
       if (sourceIndex < 0) return
-      
-      const [removed] = fields.value.splice(sourceIndex, 1)
-      
-      // 重新计算插入位置（因为 splice 删除了一个元素，索引可能发生了偏移）
-      let finalTargetIndex = fields.value.findIndex(f => f.bid === targetBid)
-      if (overPosition.value === 'bottom') {
-        finalTargetIndex += 1
+
+      const insertIndex = overPosition.value === 'bottom' ? targetIndex + 1 : targetIndex
+      const nextFields = [...fields.value]
+      const [removed] = nextFields.splice(sourceIndex, 1)
+      const finalTargetIndex = sourceIndex < insertIndex ? insertIndex - 1 : insertIndex
+
+      if (finalTargetIndex === sourceIndex) {
+        handleDragEnd()
+        return
       }
-      
-      fields.value.splice(finalTargetIndex, 0, removed)
+
+      nextFields.splice(finalTargetIndex, 0, removed)
+      fields.value = withSortOrder(nextFields)
       selectedIndex.value = finalTargetIndex
     }
-
-    // 更新所有字段的排序权重
-    fields.value.forEach((f, i) => {
-      f.sortOrder = i + 1
-    })
     
     handleDragEnd()
   }
@@ -141,6 +191,7 @@ export const useDesignerDrag = (
     handleDragStartFromLibrary,
     handleDragStartFromCanvas,
     handleDragOverField,
+    handleDragOverCanvas,
     handleDragLeave,
     handleDragEnd,
     handleDropOnCanvas,

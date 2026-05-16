@@ -5,7 +5,10 @@ import type { RawBusinessField, RawConstraint } from '../../../components/a-sche
  * 字段属性配置逻辑 Hook
  * 负责解析和更新选中字段的约束 (Constraint)、权限 (State) 和数据源 (DataSource)
  */
-export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) => {
+export const useFieldProperties = (
+  selectedField: Ref<RawBusinessField | null>,
+  updateField: (patch: Partial<RawBusinessField>) => void
+) => {
   // --- 状态定义 ---
 
   // 数据源类型: 静态枚举 或 远程 URL
@@ -16,8 +19,57 @@ export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) 
   const urlValueKey = ref('')
   // URL 返回对象中的 Label 字段名
   const urlLabelKey = ref('')
+  const isSyncingDataSourceType = ref(false)
 
   // --- 内部辅助方法 ---
+
+  /**
+   * 根据字段类型解析默认值
+   * 让默认值存储尽量贴近真实组件需要的值类型。
+   */
+  const parseDefaultValueByField = (value: string) => {
+    if (!selectedField.value) return value
+
+    const controlStyle = selectedField.value.controlStyle
+    const trimmedValue = value.trim()
+
+    if (trimmedValue === '') {
+      return ''
+    }
+
+    if (controlStyle === 'checkbox') {
+      return ['true', '1', 'yes', 'on'].includes(trimmedValue.toLowerCase())
+    }
+
+    if (['double', 'rate', 'slider'].includes(controlStyle)) {
+      const parsedNumber = Number(trimmedValue)
+      return Number.isNaN(parsedNumber) ? value : parsedNumber
+    }
+
+    if (controlStyle === 'checkboxGroup') {
+      try {
+        const parsed = JSON.parse(trimmedValue)
+        return Array.isArray(parsed) ? parsed : [parsed]
+      } catch {
+        return trimmedValue
+          .split('||')
+          .map(item => item.trim())
+          .filter(Boolean)
+      }
+    }
+
+    return value
+  }
+
+  /**
+   * 将默认值转换成表单输入框可编辑的字符串
+   * 便于数组、布尔、数字在右侧属性面板中展示。
+   */
+  const stringifyDefaultValue = (value: unknown) => {
+    if (value === null || value === undefined) return ''
+    if (Array.isArray(value)) return JSON.stringify(value)
+    return String(value)
+  }
 
   /**
    * 更新字段的约束 JSON 字符串
@@ -51,7 +103,13 @@ export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) 
       })
     }
 
-    selectedField.value.constraintInfo = constraints.length > 0 ? JSON.stringify(constraints) : null
+    const nextConstraintInfo = constraints.length > 0 ? JSON.stringify(constraints) : null
+
+    if (selectedField.value.constraintInfo === nextConstraintInfo) {
+      return
+    }
+
+    updateField({ constraintInfo: nextConstraintInfo })
   }
 
   // --- 计算属性 (映射到 UI) ---
@@ -81,12 +139,12 @@ export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) 
       try {
         const constraints = JSON.parse(selectedField.value.constraintInfo) as RawConstraint[]
         const found = constraints.find(c => c.key === 'default_value')
-        return found ? String(found.value) : ''
+        return found ? stringifyDefaultValue(found.value) : ''
       } catch {
         return ''
       }
     },
-    set: (val: string) => updateConstraint('default_value', val)
+    set: (val: string) => updateConstraint('default_value', parseDefaultValueByField(val))
   })
 
   /**
@@ -116,6 +174,7 @@ export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) 
    */
   watch(selectedField, (newField) => {
     if (!newField) return
+    isSyncingDataSourceType.value = true
     try {
       const constraints = JSON.parse(newField.constraintInfo || '[]') as RawConstraint[]
       const urlConstraint = constraints.find(c => c.key === 'url')
@@ -138,8 +197,30 @@ export const useFieldProperties = (selectedField: Ref<RawBusinessField | null>) 
       }
     } catch {
       dataSourceType.value = 'enum'
+      urlPath.value = ''
+      urlValueKey.value = ''
+      urlLabelKey.value = ''
+    } finally {
+      isSyncingDataSourceType.value = false
     }
   }, { immediate: true })
+
+  /**
+   * 数据源类型切换时，立即清理互斥约束，保持 schema 与 UI 一致。
+   */
+  watch(dataSourceType, (type) => {
+    if (isSyncingDataSourceType.value) return
+
+    if (type === 'enum') {
+      urlPath.value = ''
+      urlValueKey.value = ''
+      urlLabelKey.value = ''
+      updateConstraint('url', null)
+      return
+    }
+
+    updateConstraint('enum', null)
+  })
 
   /**
    * 监听 URL 相关部件变化，实时合并回约束 JSON

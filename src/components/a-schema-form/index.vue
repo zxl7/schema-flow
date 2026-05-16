@@ -30,7 +30,7 @@
                 【作用域插槽：field-item】
                 允许外部（如设计器）接管整个表单项的渲染（包含 Label 和容器）。
               -->
-              <slot name="field-item" :field="field">
+              <slot name="field-item" :field="field" :formModel="formModel">
                 <a-form-item
                   :label="field.displayName"
                   :name="field.attributeNum"
@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { BusinessFieldGroup, FieldOption, FormMode, FormModel, OptionProvider, RawBusinessField, FormGlobalConfig } from './types'
+import type { BusinessFieldGroup, FieldOption, FieldValue, FormMode, FormModel, OptionProvider, RawBusinessField, FormGlobalConfig } from './types'
 import { createInitialModel, createSubmitValues, groupFields } from './utils'
 import BusinessField from './BusinessField.vue'
 
@@ -108,6 +108,7 @@ const formRef = ref()
 
 // 核心状态
 const formModel = reactive<FormModel>({})
+const previousSchemaDefaults = ref<Record<string, FieldValue>>({})
 
 /**
  * 计算字段的动态表达式 (目前支持控制 hidden 属性)
@@ -131,22 +132,26 @@ const evaluateExpression = (expression: string | null | undefined, formModel: Fo
  * 依赖于 fields, mode, dictionaries, forceShowAll 以及 formModel 的变化
  */
 const groups = computed(() => {
+  // 1. 基础归一化和分组
   const baseGroups = groupFields(props.fields, props.mode, props.dictionaries, props.forceShowAll)
   
-  // 第二遍遍历：执行动态联动逻辑
-  // 即使在 forceShowAll = true 时，我们也计算 hidden，因为设计器需要展示“已隐藏”的角标
-  baseGroups.forEach(group => {
-    group.fields.forEach(field => {
-      // 如果字段配置了联动表达式
+  // 2. 执行动态联动逻辑，生成全新的字段对象，避免在 computed 中进行 Mutation
+  return baseGroups.map(group => ({
+    ...group,
+    fields: group.fields.map(field => {
       if (field.logic.expression) {
-        // 表达式返回 true 时，表示条件满足（即显示）
         const isVisible = evaluateExpression(field.logic.expression, formModel)
-        field.logic.hidden = !isVisible
+        return {
+          ...field,
+          logic: {
+            ...field.logic,
+            hidden: !isVisible
+          }
+        }
       }
+      return field
     })
-  })
-  
-  return baseGroups
+  }))
 })
 
 // 过滤掉不可见分组
@@ -184,17 +189,35 @@ const rules = computed(() => {
  * 初始化表单数据
  */
 const fillForm = (groupsValue: BusinessFieldGroup[]): void => {
-  // 不再粗暴地清空整个 formModel，这会导致已输入的数据在模式切换时丢失
-  // 而是只增量更新初始值，或者清理不在 schema 中的数据
   const base = createInitialModel(groupsValue)
   const final = { ...base, ...props.initialValues }
-  
-  // 保留用户已经输入的值，只在不存在时才用 final 里的默认值覆盖
-  Object.keys(final).forEach(key => {
-    if (formModel[key] === undefined) {
-      formModel[key] = final[key]
+  const nextKeys = new Set(Object.keys(final))
+
+  // 清理已经不在 schema 中的旧字段，确保 attributeNum 等配置变更后模型同步更新。
+  Object.keys(formModel).forEach(key => {
+    if (!nextKeys.has(key)) {
+      delete formModel[key]
     }
   })
+
+  Object.entries(final).forEach(([key, nextValue]) => {
+    const hasCurrentValue = Object.prototype.hasOwnProperty.call(formModel, key)
+    const previousDefaultValue = previousSchemaDefaults.value[key]
+
+    // 如果字段是新增的，直接应用默认值。
+    if (!hasCurrentValue) {
+      formModel[key] = nextValue
+      return
+    }
+
+    // 只有当前值仍等于“旧 schema 默认值”时，才跟随 schema 新默认值更新，
+    // 避免覆盖用户已经手动输入过的数据。
+    if (formModel[key] === previousDefaultValue && nextValue !== previousDefaultValue) {
+      formModel[key] = nextValue
+    }
+  })
+
+  previousSchemaDefaults.value = final
 }
 
 const resetForm = (): void => {

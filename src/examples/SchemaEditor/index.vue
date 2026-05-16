@@ -94,7 +94,7 @@
           
           <div 
             class="preview-canvas"
-            @dragover.prevent
+            @dragover.prevent="isDesignerMode && handleDragOverCanvas($event)"
             @drop="isDesignerMode && handleDropOnCanvas($event)"
           >
             <div 
@@ -112,7 +112,6 @@
               :force-show-all="isDesignerMode"
               :global-config="globalConfig"
               title="表单预览"
-              @change="handleFormChange"
             >
               <!-- 增加一些交互，让预览中的元素可点击 -->
               <template #header>
@@ -122,7 +121,7 @@
               </template>
 
               <!-- 使用 field-item 插槽，将 Label 和组件整体包裹在卡片中 -->
-              <template #field-item="{ field }">
+              <template #field-item="{ field, formModel }">
                 <div 
                   class="field-item-card" 
                   :class="{ 
@@ -191,9 +190,9 @@
                       <component 
                         :is="componentMap[field.uiType]"
                         v-bind="field.props"
-                        v-model:model-value="previewValues[field.attributeNum]"
+                        v-model:model-value="formModel[field.attributeNum]"
                         :field="field"
-                        :form-model="previewValues"
+                        :form-model="formModel"
                       />
                     </div>
                   </div>
@@ -216,7 +215,7 @@
 
     <!-- 导出弹窗 -->
     <a-modal
-      v-model:visible="showExportModal"
+      v-model:open="showExportModal"
       title="导出 Schema JSON"
       @ok="showExportModal = false"
       width="800px"
@@ -231,7 +230,7 @@
 
     <!-- 导入弹窗 -->
     <a-modal
-      v-model:visible="showImportModal"
+      v-model:open="showImportModal"
       title="导入 Schema JSON"
       @ok="handleImport"
       width="800px"
@@ -248,13 +247,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import ASchemaForm from '../../components/a-schema-form/index.vue'
-import type { RawBusinessField, FormMode, RawConstraint } from '../../components/a-schema-form/types'
-import { normalizeField } from '../../components/a-schema-form/utils'
+import type { RawBusinessField, FormMode } from '../../components/a-schema-form/types'
 
 // 导入 Hook
 import { useDesignerDrag } from './hooks/useDesignerDrag'
 import { useDesignerFields } from './hooks/useDesignerFields.ts'
-import { useFieldProperties } from './hooks/useFieldProperties'
 import { useHistory } from './hooks/useHistory'
 import PropertyPanel from './components/PropertyPanel.vue'
 
@@ -305,7 +302,6 @@ const {
   isIdDuplicated,
   createNewField,
   addComponent,
-  removeComponent,
   removeFieldByBid,
   handleFieldSelect,
   cloneField,
@@ -313,7 +309,7 @@ const {
   clearCanvas,
   isFirstField,
   isLastField,
-  updateField
+  updateSelectedField
 } = useDesignerFields()
 
 // B. 拖拽交互 (库拖入、画布排序、腾空效果)
@@ -325,6 +321,7 @@ const {
   handleDragStartFromLibrary,
   handleDragStartFromCanvas,
   handleDragOverField,
+  handleDragOverCanvas,
   handleDragLeave,
   handleDragEnd,
   handleDropOnCanvas,
@@ -332,13 +329,12 @@ const {
 } = useDesignerDrag(fields, selectedIndex, createNewField)
 
 // C. 处理来自属性面板的更新
-const handleUpdateField = (updatedField: RawBusinessField) => {
-  updateField(updatedField)
+const handleUpdateField = (patch: Partial<RawBusinessField>) => {
+  updateSelectedField(patch)
 }
 
 // D. 本地预览相关状态
 const previewMode = ref<FormMode>('create')
-const previewValues = ref<Record<string, any>>({})
 const leftTab = ref('components') // 左侧面板的 Tab 切换状态
 
 // 表单全局配置状态
@@ -351,11 +347,6 @@ const globalConfig = ref<FormGlobalConfig>({
 
 // 只有 create 和 edit 模式才算真正的设计器模式（允许修改 schema）
 const isDesignerMode = computed(() => previewMode.value === 'create' || previewMode.value === 'edit')
-
-// 监听表单内部数据变化，同步到外部，用于联动计算
-const handleFormChange = (values: Record<string, any>) => {
-  previewValues.value = { ...values }
-}
 
 // F. 撤销重做历史记录
 const { undo, redo, canUndo, canRedo, initHistory } = useHistory(fields, selectedIndex)
@@ -429,32 +420,6 @@ const handleImport = () => {
   }
 }
 
-// --- 4. 预览与业务逻辑 ---
-
-/**
- * 应用字段的默认值到预览表单
- */
-const applyDefaultValues = () => {
-  fields.value.forEach(f => {
-    const normalized = normalizeField(f, previewMode.value)
-    if (normalized.logic.defaultValue !== undefined && normalized.logic.defaultValue !== null) {
-      if (previewValues.value[f.attributeNum] === undefined) {
-        previewValues.value[f.attributeNum] = normalized.logic.defaultValue
-      }
-    }
-  })
-}
-
-// 监听选中字段的约束变化，实时更新预览值
-watch(() => selectedField.value?.constraintInfo, () => {
-  if (selectedField.value) {
-    const normalized = normalizeField(selectedField.value, previewMode.value)
-    if (normalized.logic.defaultValue !== undefined) {
-      previewValues.value[selectedField.value.attributeNum] = normalized.logic.defaultValue
-    }
-  }
-}, { deep: true })
-
 // --- 5. 生命周期与持久化 ---
 
 const STORAGE_KEY = 'SCHEMA_EDITOR_DRAFT'
@@ -526,14 +491,6 @@ watch(globalConfig, (newVal) => {
   localStorage.setItem(GLOBAL_CONFIG_KEY, JSON.stringify(newVal))
 }, { deep: true })
 
-/**
- * 切换预览模式时自动填充默认值
- */
-watch(previewMode, (mode) => {
-  if (mode === 'view' || mode === 'edit') {
-    applyDefaultValues()
-  }
-})
 </script>
 
 <style scoped>
@@ -695,8 +652,8 @@ watch(previewMode, (mode) => {
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 12px;
-  /* 简化过渡：只保留基础的颜色变化，移除位移动画 */
-  transition: all 0.2s ease;
+  /* 拖拽过程中避免触发布局位移，只保留颜色过渡 */
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 /* 仅在设计模式下有交互样式 */
@@ -716,13 +673,10 @@ watch(previewMode, (mode) => {
   z-index: 10;
 }
 
-/* 拖拽腾空效果 */
-.field-item-card.drop-over-top {
-  margin-top: 48px; /* 腾出空间 */
-}
-
+/* 拖拽命中时仅提升层级，不改动布局，避免 hover 区域来回抖动 */
+.field-item-card.drop-over-top,
 .field-item-card.drop-over-bottom {
-  margin-bottom: 48px; /* 腾出空间 */
+  z-index: 12;
 }
 
 /* 占位符提示线 */
@@ -735,6 +689,7 @@ watch(previewMode, (mode) => {
   display: none;
   z-index: 20;
   border-radius: 2px;
+  pointer-events: none;
 }
 
 .drop-placeholder-line::after {
@@ -750,12 +705,12 @@ watch(previewMode, (mode) => {
 
 .drop-over-top .drop-placeholder-line.top {
   display: block;
-  top: -24px;
+  top: -7px;
 }
 
 .drop-over-bottom .drop-placeholder-line.bottom {
   display: block;
-  bottom: -24px;
+  bottom: -7px;
 }
 
 .field-item-card.is-dragging {
