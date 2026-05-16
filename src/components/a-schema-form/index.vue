@@ -17,20 +17,26 @@
         <section v-for="group in visibleGroups" :key="group.name" class="a-schema-form__group">
           <h3>{{ group.name }}</h3>
           <div class="a-schema-form__grid">
-            <a-form-item
-              v-for="field in group.fields"
-              :key="field.attributeNum"
-              :label="field.displayName"
-              :name="field.attributeNum"
-              :class="{ 'is-full': field.logic.formWidth === '100%' }"
-            >
-              <BusinessField
-                v-model:model-value="formModel[field.attributeNum]"
-                :field="field"
-                :form-model="formModel"
-                :option-provider="optionProvider"
-              />
-            </a-form-item>
+            <template v-for="field in group.fields" :key="field.attributeNum">
+              <!-- 
+                【作用域插槽：field-item】
+                允许外部（如设计器）接管整个表单项的渲染（包含 Label 和容器）。
+              -->
+              <slot name="field-item" :field="field">
+                <a-form-item
+                  :label="field.displayName"
+                  :name="field.attributeNum"
+                  :class="{ 'is-full': field.logic.formWidth === '100%' }"
+                >
+                  <BusinessField
+                    v-model:model-value="formModel[field.attributeNum]"
+                    :field="field"
+                    :form-model="formModel"
+                    :option-provider="optionProvider"
+                  />
+                </a-form-item>
+              </slot>
+            </template>
           </div>
         </section>
       </a-form>
@@ -65,6 +71,7 @@ const props = withDefaults(
     includeHiddenValues?: boolean
     optionProvider?: OptionProvider
     dictionaries?: Record<string, FieldOption[]> // 外部传入的字典数据
+    forceShowAll?: boolean // 是否强制显示所有字段（设计器使用）
   }>(),
   {
     title: '',
@@ -72,6 +79,7 @@ const props = withDefaults(
     includeHiddenValues: false,
     initialValues: () => ({}),
     dictionaries: () => ({}),
+    forceShowAll: false,
   }
 )
 
@@ -89,7 +97,7 @@ const formModel = reactive<FormModel>({})
 /**
  * 【数据计算流】
  */
-const groups = computed(() => groupFields(props.fields, props.mode, props.dictionaries))
+const groups = computed(() => groupFields(props.fields, props.mode, props.dictionaries, props.forceShowAll))
 
 // 过滤掉不可见分组
 const visibleGroups = computed(() => 

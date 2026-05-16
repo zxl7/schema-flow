@@ -52,30 +52,76 @@
               v-else
               :fields="fields"
               :mode="previewMode"
+              :force-show-all="previewMode !== 'view'"
               title="表单预览"
             >
               <!-- 增加一些交互，让预览中的元素可点击 -->
               <template #header>
                 <div class="canvas-header">
-                  <span>点击下方字段可进行属性配置</span>
+                  <span>点击下方卡片可配置字段属性</span>
+                </div>
+              </template>
+
+              <!-- 使用 field-item 插槽，将 Label 和组件整体包裹在卡片中 -->
+              <template #field-item="{ field }">
+                <div 
+                  class="field-item-card" 
+                  :class="{ 
+                    active: selectedField && selectedField.bid === field.bid,
+                    'is-designer': previewMode !== 'view',
+                    'is-hidden': field.logic.hidden,
+                    'is-readonly': field.props.disabled
+                  }"
+                  @click="previewMode !== 'view' && handleFieldSelect(field)"
+                >
+                  <!-- 顶部操作栏：预览模式下隐藏 -->
+                  <div v-if="previewMode !== 'view'" class="field-card-actions">
+                    <span v-if="field.logic.hidden" class="status-badge hidden">已隐藏</span>
+                    <span v-if="field.props.disabled" class="status-badge readonly">只读</span>
+                    <a-button-group size="small">
+                      <a-button 
+                        title="上移"
+                        @click.stop="moveField(field.bid, 'up')"
+                        :disabled="isFirstField(field.bid)"
+                      >
+                        ↑
+                      </a-button>
+                      <a-button 
+                        title="下移"
+                        @click.stop="moveField(field.bid, 'down')"
+                        :disabled="isLastField(field.bid)"
+                      >
+                        ↓
+                      </a-button>
+                      <a-button 
+                        danger
+                        title="删除"
+                        @click.stop="removeFieldByBid(field.bid)"
+                      >
+                        删除
+                      </a-button>
+                    </a-button-group>
+                  </div>
+
+                  <!-- 模拟 a-form-item 的布局 -->
+                  <div class="field-card-content">
+                    <div class="field-card-label">
+                      <span v-if="field.props.required" class="required-star">*</span>
+                      {{ field.displayName }}
+                    </div>
+                    <div class="field-card-component">
+                      <component 
+                        :is="componentMap[field.uiType]"
+                        v-bind="field.props"
+                        v-model:model-value="previewValues[field.attributeNum]"
+                        :field="field"
+                        :form-model="previewValues"
+                      />
+                    </div>
+                  </div>
                 </div>
               </template>
             </a-schema-form>
-
-            <!-- 简单的字段列表，用于点击选择进行编辑 -->
-            <div class="field-list-overlay">
-              <div 
-                v-for="(field, index) in fields" 
-                :key="field.bid" 
-                class="field-item-mask"
-                :class="{ active: selectedIndex === index }"
-                @click="selectedIndex = index"
-              >
-                <div class="field-actions">
-                  <a-button type="text" danger size="small" @click.stop="removeComponent(index)">删除</a-button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </main>
@@ -104,12 +150,35 @@
             <a-form-item label="排序权重 (sortOrder)">
               <a-input-number v-model:value="selectedField.sortOrder" :min="0" />
             </a-form-item>
+
+            <a-divider>状态配置 (Permissions)</a-divider>
+            <div class="state-config-grid">
+              <a-form-item label="新增模式 (Create)">
+                <a-select v-model:value="selectedField.createState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="编辑模式 (Edit)">
+                <a-select v-model:value="selectedField.editState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="预览模式 (View)">
+                <a-select v-model:value="selectedField.viewState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+            </div>
             
             <a-divider>约束配置</a-divider>
             
-            <div class="constraint-item">
-              <a-checkbox v-model:checked="isFieldRequired">是否必填</a-checkbox>
-            </div>
+            
             
             <a-form-item label="默认值">
               <a-input v-model:value="fieldDefaultValue" placeholder="请输入默认值" />
@@ -175,26 +244,49 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import ASchemaForm from '../../components/a-schema-form/index.vue'
-import type { RawBusinessField, FormMode, RawConstraint } from '../../components/a-schema-form/types'
+import type { RawBusinessField, FormMode, RawConstraint, BusinessField } from '../../components/a-schema-form/types'
+import { normalizeField } from '../../components/a-schema-form/utils'
+
+// 导入所有基础组件用于预览
+import FieldInput from '../../components/a-schema-form/components/FieldInput.vue'
+import FieldSelect from '../../components/a-schema-form/components/FieldSelect.vue'
+import FieldTree from '../../components/a-schema-form/components/FieldTree.vue'
+import FieldView from '../../components/a-schema-form/components/FieldView.vue'
+import FieldRadio from '../../components/a-schema-form/components/FieldRadio.vue'
+import FieldCheckboxGroup from '../../components/a-schema-form/components/FieldCheckboxGroup.vue'
+import FieldRate from '../../components/a-schema-form/components/FieldRate.vue'
+import FieldSlider from '../../components/a-schema-form/components/FieldSlider.vue'
 
 // 1. 可用组件列表
 const availableComponents = [
-  { type: 'textInput', label: '单行文本', icon: '📝' },
-  { type: 'select', label: '下拉选择', icon: '🔽' },
-  { type: 'date', label: '日期选择', icon: '📅' },
-  { type: 'radio', label: '单选框', icon: '🔘' },
-  { type: 'checkboxGroup', label: '多选框组', icon: '✅' },
-  { type: 'double', label: '数字输入', icon: '🔢' },
-  { type: 'editor', label: '富文本/长文本', icon: '📄' },
-  { type: 'rate', label: '评分', icon: '⭐' },
-  { type: 'slider', label: '滑块', icon: '📏' }
+  { type: 'textInput', label: '单行文本', icon: '📝', uiType: 'input' },
+  { type: 'select', label: '下拉选择', icon: '🔽', uiType: 'select' },
+  { type: 'date', label: '日期选择', icon: '📅', uiType: 'input' },
+  { type: 'radio', label: '单选框', icon: '🔘', uiType: 'radio' },
+  { type: 'checkboxGroup', label: '多选框组', icon: '✅', uiType: 'checkboxGroup' },
+  { type: 'double', label: '数字输入', icon: '🔢', uiType: 'input' },
+  { type: 'editor', label: '富文本/长文本', icon: '📄', uiType: 'input' },
+  { type: 'rate', label: '评分', icon: '⭐', uiType: 'rate' },
+  { type: 'slider', label: '滑块', icon: '📏', uiType: 'slider' }
 ]
+
+const componentMap: Record<string, any> = {
+  input: FieldInput,
+  select: FieldSelect,
+  tree: FieldTree,
+  view: FieldView,
+  radio: FieldRadio,
+  checkboxGroup: FieldCheckboxGroup,
+  rate: FieldRate,
+  slider: FieldSlider
+}
 
 // 2. 状态管理
 const fields = ref<RawBusinessField[]>([])
 const selectedIndex = ref<number>(-1)
 const previewMode = ref<FormMode>('create')
 const showExportModal = ref(false)
+const previewValues = ref<Record<string, any>>({})
 
 // 数据源相关状态
 const dataSourceType = ref<'enum' | 'url'>('enum')
@@ -209,6 +301,51 @@ const selectedField = computed(() => {
   }
   return null
 })
+
+const handleFieldSelect = (field: RawBusinessField) => {
+  const index = fields.value.findIndex(f => f.bid === field.bid)
+  selectedIndex.value = index
+}
+
+const removeFieldByBid = (bid: string) => {
+  const index = fields.value.findIndex(f => f.bid === bid)
+  if (index >= 0) {
+    removeComponent(index)
+  }
+}
+
+const moveField = (bid: string, direction: 'up' | 'down') => {
+  const index = fields.value.findIndex(f => f.bid === bid)
+  if (index < 0) return
+
+  const targetIndex = direction === 'up' ? index - 1 : index + 1
+  if (targetIndex < 0 || targetIndex >= fields.value.length) return
+
+  // 1. 交换数组元素位置（控制视图显示顺序）
+  const temp = fields.value[index]
+  fields.value[index] = fields.value[targetIndex]
+  fields.value[targetIndex] = temp
+
+  // 2. 重要：同步更新 sortOrder 权重，确保导出数据也符合顺序
+  fields.value.forEach((f, i) => {
+    f.sortOrder = i + 1
+  })
+
+  // 3. 同步更新选中索引
+  if (selectedIndex.value === index) {
+    selectedIndex.value = targetIndex
+  } else if (selectedIndex.value === targetIndex) {
+    selectedIndex.value = index
+  }
+}
+
+const isFirstField = (bid: string) => {
+  return fields.value.length > 0 && fields.value[0].bid === bid
+}
+
+const isLastField = (bid: string) => {
+  return fields.value.length > 0 && fields.value[fields.value.length - 1].bid === bid
+}
 
 // 4. 辅助：解析和构造 constraintInfo
 const isFieldRequired = computed({
@@ -356,6 +493,37 @@ const removeComponent = (index: number) => {
 const exportJson = () => {
   showExportModal.value = true
 }
+
+/**
+ * 核心逻辑：应用默认值到表单
+ * 遍历所有字段，提取其约束中的 default_value 并填充到 previewValues
+ */
+const applyDefaultValues = () => {
+  fields.value.forEach(f => {
+    // 使用组件库内置的归一化逻辑获取默认值
+    const normalized = normalizeField(f, previewMode.value)
+    if (normalized.logic.defaultValue !== undefined && normalized.logic.defaultValue !== null) {
+      previewValues.value[f.attributeNum] = normalized.logic.defaultValue
+    }
+  })
+}
+
+// 监听预览模式变化，自动填充默认值
+watch(previewMode, (mode) => {
+  if (mode === 'view' || mode === 'edit') {
+    applyDefaultValues()
+  }
+})
+
+// 监听字段属性中的默认值修改，实时同步到预览
+watch(() => selectedField.value?.constraintInfo, () => {
+  if (selectedField.value) {
+    const normalized = normalizeField(selectedField.value, previewMode.value)
+    if (normalized.logic.defaultValue !== undefined) {
+      previewValues.value[selectedField.value.attributeNum] = normalized.logic.defaultValue
+    }
+  }
+}, { deep: true })
 </script>
 
 <style scoped>
@@ -476,8 +644,9 @@ const exportJson = () => {
 
 .preview-canvas {
   flex: 1;
-  padding: 24px;
+  padding: 40px;
   position: relative;
+  background: #f5f7fa;
 }
 
 .empty-tip {
@@ -491,10 +660,15 @@ const exportJson = () => {
   overflow-y: auto;
 }
 
-.url-config-grid {
+.url-config-grid,
+.state-config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.state-config-grid {
+  grid-template-columns: 1fr; /* 状态配置垂直排列更清晰 */
 }
 
 .tip {
@@ -504,52 +678,94 @@ const exportJson = () => {
   margin-top: 4px;
 }
 
-.field-list-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none; /* 让点击能穿透到下面的组件，除非我们显式捕获 */
-  padding: 24px; /* 匹配预览区域 padding */
-  display: flex;
-  flex-direction: column;
-  gap: 0; /* 匹配表单项间距 */
-}
-
-/* 简单的字段蒙层，用于点击选择 */
-/* 这里我们根据预览模式下的表单布局来对齐 */
-.field-item-mask {
-  height: 80px; /* 粗略估计高度，后期可以根据实际动态计算 */
-  margin-bottom: 8px;
-  border: 2px dashed transparent;
-  pointer-events: auto;
-  cursor: pointer;
+.field-item-card {
   position: relative;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 12px;
   transition: all 0.2s;
 }
 
-.field-item-mask:hover {
-  background: rgba(24, 144, 255, 0.05);
-  border-color: #91d5ff;
+/* 仅在设计模式下有交互样式 */
+.field-item-card.is-designer {
+  border: 1px dashed #d9d9d9;
+  cursor: pointer;
 }
 
-.field-item-mask.active {
-  background: rgba(24, 144, 255, 0.1);
+.field-item-card.is-designer:hover {
   border-color: #1890ff;
-  border-style: solid;
+  background: #fafafa;
 }
 
-.field-actions {
+.field-item-card.is-designer.active {
+  border: 2px dashed #1890ff;
+  background: #f0f7ff;
+  z-index: 10;
+}
+
+.field-item-card.is-hidden {
+  opacity: 0.5;
+  background: #f9f9f9;
+}
+
+.field-item-card.is-readonly {
+  background: #fafafa;
+}
+
+.status-badge {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+  color: #fff;
+}
+
+.status-badge.hidden {
+  background: #bfbfbf;
+}
+
+.status-badge.readonly {
+  background: #ffa940;
+}
+
+.field-card-actions {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  display: flex;
+  align-items: center;
+  top: 8px;
+  right: 8px;
   opacity: 0;
   transition: opacity 0.2s;
+  z-index: 11;
 }
 
-.field-item-mask:hover .field-actions {
+.field-item-card.active .field-card-actions,
+.field-item-card:hover .field-card-actions {
   opacity: 1;
+}
+
+.field-card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-card-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.required-star {
+  color: #ff4d4f;
+  margin-right: 4px;
+}
+
+.field-card-component {
+  min-height: 32px;
 }
 
 .json-preview {

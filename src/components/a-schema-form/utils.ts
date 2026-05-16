@@ -157,17 +157,19 @@ const buildDefaultOptions = (
  * @param fields - 原始字段数组
  * @param mode - 模式
  * @param dictionaries - 字典库
+ * @param forceShowAll - 是否强制显示所有字段
  */
 export const groupFields = (
   fields: RawBusinessField[], 
   mode: FormMode,
-  dictionaries: Record<string, FieldOption[]> = {}
+  dictionaries: Record<string, FieldOption[]> = {},
+  forceShowAll = false
 ): BusinessFieldGroup[] => {
   const groups: Record<string, BusinessField[]> = {}
   
   fields.forEach(f => {
     const field = normalizeField(f, mode, dictionaries)
-    if (field.logic.hidden) return 
+    if (!forceShowAll && field.logic.hidden) return 
     
     const tag = field.groupTag || '基础信息'
     if (!groups[tag]) groups[tag] = []
