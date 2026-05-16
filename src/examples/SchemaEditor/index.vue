@@ -145,10 +145,7 @@
                     v-if="isDesignerMode && overBid === field.bid"
                     class="drop-indicator-line"
                     :class="overPosition"
-                  >
-                    <div class="dot"></div>
-                    <div class="line"></div>
-                  </div>
+                  ></div>
 
                   <!-- 顶部操作栏：仅设计模式可见 -->
                   <div v-if="isDesignerMode" class="field-card-actions">
@@ -698,44 +695,40 @@ watch(globalConfig, (newVal) => {
   z-index: 10;
 }
 
-/* 插入指示器容器：绝对定位在组件之间的间隙中心 */
+/* 插入指示器：独立线条，精准定位在 12px 间隙正中心 */
 .drop-indicator-line {
   position: absolute;
   left: 0;
   right: 0;
-  height: 3px;
-  display: flex;
-  align-items: center;
-  z-index: 100;
+  height: 2px;
+  background: #1890ff;
+  z-index: 1000;
   pointer-events: none;
-  /* 默认在组件上方间隙中心 (12px 间隙 / 2 = 6px, 线厚度 3px / 2 = 1.5px, 所以 top 为 -7.5px) */
-  top: -7.5px;
+  /* 12px 间隙中点计算：
+     间隙从 0 到 -12px，中点在 -6px。
+     线条高度 2px，要使中心在 -6px，则 top = -6px - (2px / 2) = -7px
+  */
+  top: -7px;
+  box-shadow: 0 0 4px rgba(24, 144, 255, 0.3);
 }
 
 .drop-indicator-line.bottom {
   top: auto;
-  bottom: -7.5px;
+  bottom: -7px;
 }
 
-.drop-indicator-line .dot {
+/* 指示器圆点：使用伪元素确保与线条绝对对齐 */
+.drop-indicator-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  /* 圆点 8px，线条 2px。圆点中心对齐线条中心：(2px - 8px) / 2 = -3px */
+  top: -3px;
   width: 8px;
   height: 8px;
   background: #1890ff;
   border-radius: 50%;
-  margin-left: -4px;
-  flex-shrink: 0;
   box-shadow: 0 0 4px rgba(24, 144, 255, 0.5);
-}
-
-.drop-indicator-line .line {
-  flex: 1;
-  height: 2px;
-  background: #1890ff;
-  box-shadow: 0 0 4px rgba(24, 144, 255, 0.3);
-}
-
-.field-slot-container {
-  position: relative;
 }
 
 .field-item-card.is-dragging {
