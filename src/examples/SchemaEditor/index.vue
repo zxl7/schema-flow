@@ -162,43 +162,7 @@
               <a-input-number v-model:value="selectedField.sortOrder" :min="0" />
             </a-form-item>
 
-            <a-divider>状态配置 (Permissions)</a-divider>
-            <div class="state-config-grid">
-              <a-form-item label="新增模式 (Create)">
-                <a-select v-model:value="selectedField.createState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="编辑模式 (Edit)">
-                <a-select v-model:value="selectedField.editState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-              <a-form-item label="预览模式 (View)">
-                <a-select v-model:value="selectedField.viewState">
-                  <a-select-option value="RW">可读写 (RW)</a-select-option>
-                  <a-select-option value="R">只读 (R)</a-select-option>
-                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
-                </a-select>
-              </a-form-item>
-            </div>
-            
-            <a-divider>约束配置</a-divider>
-            
-            
-            
-            <a-form-item label="默认值">
-              <a-input v-model:value="fieldDefaultValue" placeholder="请输入默认值" />
-            </a-form-item>
-            <div class="constraint-item">
-              <a-checkbox v-model:checked="isFieldRequired">是否必填</a-checkbox>
-            </div>
-
-            <!-- 下拉选项配置 -->
+            <!-- 1. 数据源配置 (调整到约束配置上方) -->
             <template v-if="['select', 'radio', 'checkboxGroup'].includes(selectedField.controlStyle)">
               <a-divider>数据源配置</a-divider>
               <a-form-item label="数据源类型">
@@ -235,6 +199,42 @@
                 </div>
               </template>
             </template>
+
+            <!-- 2. 约束配置 -->
+            <a-divider>约束配置</a-divider>
+
+            <a-form-item label="默认值">
+              <a-input v-model:value="fieldDefaultValue" placeholder="请输入默认值" />
+            </a-form-item>
+            <div class="constraint-item">
+              <a-checkbox v-model:checked="isFieldRequired">是否必填</a-checkbox>
+            </div>
+
+            <!-- 3. 状态配置 (调整到最下方) -->
+            <a-divider>状态配置 (Permissions)</a-divider>
+            <div class="state-config-grid">
+              <a-form-item label="新增模式 (Create)">
+                <a-select v-model:value="selectedField.createState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="编辑模式 (Edit)">
+                <a-select v-model:value="selectedField.editState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="预览模式 (View)">
+                <a-select v-model:value="selectedField.viewState">
+                  <a-select-option value="RW">可读写 (RW)</a-select-option>
+                  <a-select-option value="R">只读 (R)</a-select-option>
+                  <a-select-option value="hidden">隐藏 (Hidden)</a-select-option>
+                </a-select>
+              </a-form-item>
+            </div>
           </a-form>
         </div>
         <div v-else class="empty-tip">
@@ -769,26 +769,27 @@ watch(() => selectedField.value?.constraintInfo, () => {
 .field-item-card {
   position: relative;
   background: #fff;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
   padding: 16px;
   margin-bottom: 12px;
-  transition: all 0.2s;
+  /* 简化过渡：只保留基础的颜色变化，移除位移动画 */
+  transition: all 0.2s ease;
 }
 
 /* 仅在设计模式下有交互样式 */
 .field-item-card.is-designer {
-  border: 1px dashed #d9d9d9;
   cursor: pointer;
 }
 
 .field-item-card.is-designer:hover {
-  border-color: #1890ff;
+  border-color: #d9d9d9;
   background: #fafafa;
 }
 
+/* 激活状态：简约的实线/虚线边框，移除外发光和缩放 */
 .field-item-card.is-designer.active {
-  border: 2px dashed #1890ff;
+  border: 1px solid #1890ff;
   background: #f0f7ff;
   z-index: 10;
 }
@@ -821,17 +822,16 @@ watch(() => selectedField.value?.constraintInfo, () => {
 
 .field-card-actions {
   position: absolute;
-  display: flex;
-  align-items: center;
   top: 8px;
   right: 8px;
   opacity: 0;
-  transition: opacity 0.2s;
+  /* 简化按钮动画：只保留淡入效果 */
+  transition: opacity 0.2s ease;
   z-index: 11;
 }
 
-.field-item-card.active .field-card-actions,
-.field-item-card:hover .field-card-actions {
+.field-item-card.is-designer.active .field-card-actions,
+.field-item-card.is-designer:hover .field-card-actions {
   opacity: 1;
 }
 
