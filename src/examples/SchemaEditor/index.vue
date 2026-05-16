@@ -7,7 +7,10 @@
         <h2 class="title">ASchemaForm 设计器</h2>
       </div>
       <div class="header-actions">
-        <a-button type="primary" @click="exportJson">导出 JSON</a-button>
+        <a-space>
+          <a-button @click="importJson">导入 JSON</a-button>
+          <a-button type="primary" @click="exportJson">导出 JSON</a-button>
+        </a-space>
       </div>
     </header>
 
@@ -130,9 +133,17 @@
       <aside class="editor-sidebar right">
         <div class="sidebar-title">属性配置</div>
         <div v-if="selectedField" class="property-panel">
+          <!-- ID 重复警告 -->
+          <a-alert
+            v-if="isIdDuplicated"
+            message="字段 ID (attributeNum) 已存在，请修改以防数据覆盖"
+            type="error"
+            show-icon
+            style="margin-bottom: 16px"
+          />
           <a-form layout="vertical">
             <a-form-item label="字段 ID (attributeNum)">
-              <a-input v-model:value="selectedField.attributeNum" />
+              <a-input v-model:value="selectedField.attributeNum" placeholder="唯一标识，如: userName" />
             </a-form-item>
             <a-form-item label="显示名称 (displayName)">
               <a-input v-model:value="selectedField.displayName" />
@@ -183,6 +194,9 @@
             <a-form-item label="默认值">
               <a-input v-model:value="fieldDefaultValue" placeholder="请输入默认值" />
             </a-form-item>
+            <div class="constraint-item">
+              <a-checkbox v-model:checked="isFieldRequired">是否必填</a-checkbox>
+            </div>
 
             <!-- 下拉选项配置 -->
             <template v-if="['select', 'radio', 'checkboxGroup'].includes(selectedField.controlStyle)">
@@ -237,6 +251,24 @@
       width="800px"
     >
       <pre class="json-preview">{{ JSON.stringify(fields, null, 2) }}</pre>
+      <template #footer>
+        <a-button type="primary" @click="copyJson">复制到剪贴板</a-button>
+        <a-button @click="showExportModal = false">关闭</a-button>
+      </template>
+    </a-modal>
+
+    <!-- 导入弹窗 -->
+    <a-modal
+      v-model:visible="showImportModal"
+      title="导入 Schema JSON"
+      @ok="handleImport"
+      width="800px"
+    >
+      <a-textarea
+        v-model:value="importRawJson"
+        placeholder="请粘贴 demo.json 的内容..."
+        :rows="15"
+      />
     </a-modal>
   </div>
 </template>
@@ -286,6 +318,8 @@ const fields = ref<RawBusinessField[]>([])
 const selectedIndex = ref<number>(-1)
 const previewMode = ref<FormMode>('create')
 const showExportModal = ref(false)
+const showImportModal = ref(false)
+const importRawJson = ref('')
 const previewValues = ref<Record<string, any>>({})
 
 // 数据源相关状态
@@ -300,6 +334,12 @@ const selectedField = computed(() => {
     return fields.value[selectedIndex.value]
   }
   return null
+})
+
+const isIdDuplicated = computed(() => {
+  if (!selectedField.value) return false
+  const id = selectedField.value.attributeNum
+  return fields.value.some((f, i) => f.attributeNum === id && i !== selectedIndex.value)
 })
 
 const handleFieldSelect = (field: RawBusinessField) => {
@@ -494,6 +534,34 @@ const exportJson = () => {
   showExportModal.value = true
 }
 
+const copyJson = () => {
+  navigator.clipboard.writeText(JSON.stringify(fields.value, null, 2))
+  alert('已复制到剪贴板')
+}
+
+const importJson = () => {
+  importRawJson.value = ''
+  showImportModal.value = true
+}
+
+const handleImport = () => {
+  try {
+    const data = JSON.parse(importRawJson.value)
+    if (Array.isArray(data)) {
+      fields.value = data.map(item => ({
+        ...item,
+        bid: item.bid || Date.now().toString() + Math.random()
+      }))
+      showImportModal.value = false
+      selectedIndex.value = -1
+    } else {
+      alert('请输入正确的 JSON 数组格式')
+    }
+  } catch (e) {
+    alert('JSON 格式错误，请检查')
+  }
+}
+
 /**
  * 核心逻辑：应用默认值到表单
  * 遍历所有字段，提取其约束中的 default_value 并填充到 previewValues
@@ -507,6 +575,26 @@ const applyDefaultValues = () => {
     }
   })
 }
+
+import { onMounted } from 'vue'
+
+// 持久化逻辑
+const STORAGE_KEY = 'SCHEMA_EDITOR_DRAFT'
+
+onMounted(() => {
+  const draft = localStorage.getItem(STORAGE_KEY)
+  if (draft) {
+    try {
+      fields.value = JSON.parse(draft)
+    } catch (e) {
+      console.error('加载草稿失败', e)
+    }
+  }
+})
+
+watch(fields, (newVal) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
+}, { deep: true })
 
 // 监听预览模式变化，自动填充默认值
 watch(previewMode, (mode) => {

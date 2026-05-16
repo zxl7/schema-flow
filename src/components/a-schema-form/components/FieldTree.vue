@@ -64,6 +64,11 @@ onMounted(() => {
     loadOptions()
   }
 })
+onMounted(() => {
+  if (props.modelValue !== undefined && props.modelValue !== null && props.modelValue !== '' && props.field.logic.optionSource !== 'none') {
+    loadOptions()
+  }
+})
 </script>
 
 <style scoped>

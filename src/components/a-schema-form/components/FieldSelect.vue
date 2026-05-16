@@ -39,15 +39,11 @@ const currentOptions = computed(() => {
   return localOptions.value.length > 0 ? localOptions.value : (props.field.props.options || [])
 })
 
-/**
- * 触发异步加载逻辑
- */
 const loadOptions = async (): Promise<void> => {
   if (!props.optionProvider || props.field.logic.optionSource === 'none') return
   
   loading.value = true
   try {
-    // 调用外部传入的 Provider（比如发起一个 API 请求）
     const res = await props.optionProvider(props.field, props.formModel)
     localOptions.value = res
     hasLoaded.value = true
@@ -59,7 +55,7 @@ const loadOptions = async (): Promise<void> => {
 }
 
 /**
- * 聚焦加载：只有在用户点击下拉框时，才去触发接口拉取数据（按需加载）。
+ * 聚焦加载
  */
 const handleFocus = (): void => {
   if (!hasLoaded.value && props.field.logic.optionSource !== 'none') {
@@ -72,8 +68,8 @@ const onUpdate = (val: any): void => {
 }
 
 onMounted(() => {
-  // 如果是 Mock 数据源，可以在初始化时就直接加载。
-  if (props.field.logic.optionSource === 'mock') {
+  // 如果存在初始值，且是远程数据源，则立即加载以解析 Label
+  if (props.modelValue !== undefined && props.modelValue !== null && props.modelValue !== '' && props.field.logic.optionSource !== 'none') {
     loadOptions()
   }
 })
