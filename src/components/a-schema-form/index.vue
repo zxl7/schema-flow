@@ -1,43 +1,43 @@
 <template>
   <div class="a-schema-form">
-    <!-- 
-      1. 头部插槽
-      允许父组件自定义标题、操作按钮等。
-      如果父组件不传，则默认不显示。
-    -->
-    <slot name="header" :title="title">
-      <div v-if="title" class="a-schema-form__header">
-        <h2>{{ title }}</h2>
-      </div>
-    </slot>
-
-    <!-- 
-      2. 动态表单容器
-    -->
-    <a-form ref="formRef" class="a-schema-form__form" layout="vertical" :model="formModel" :rules="rules">
-      <section v-for="group in visibleGroups" :key="group.name" class="a-schema-form__group">
-        <h3>{{ group.name }}</h3>
-        <div class="a-schema-form__grid">
-          <a-form-item
-            v-for="field in group.fields"
-            :key="field.attributeNum"
-            :label="field.displayName"
-            :name="field.attributeNum"
-            :class="{ 'is-full': field.logic.formWidth === '100%' }"
-          >
-            <BusinessField
-              v-model:model-value="formModel[field.attributeNum]"
-              :field="field"
-              :form-model="formModel"
-              :option-provider="optionProvider"
-            />
-          </a-form-item>
+    <div class="a-schema-form__container">
+      <!-- 
+        1. 头部插槽
+      -->
+      <slot name="header" :title="title">
+        <div v-if="title" class="a-schema-form__header">
+          <h2>{{ title }}</h2>
         </div>
-      </section>
-    </a-form>
+      </slot>
 
-    <!-- 3. 底部插槽 -->
-    <slot name="footer" :submit="submitForm" :reset="resetForm"></slot>
+      <!-- 
+        2. 动态表单容器
+      -->
+      <a-form ref="formRef" class="a-schema-form__form" layout="vertical" :model="formModel" :rules="rules">
+        <section v-for="group in visibleGroups" :key="group.name" class="a-schema-form__group">
+          <h3>{{ group.name }}</h3>
+          <div class="a-schema-form__grid">
+            <a-form-item
+              v-for="field in group.fields"
+              :key="field.attributeNum"
+              :label="field.displayName"
+              :name="field.attributeNum"
+              :class="{ 'is-full': field.logic.formWidth === '100%' }"
+            >
+              <BusinessField
+                v-model:model-value="formModel[field.attributeNum]"
+                :field="field"
+                :form-model="formModel"
+                :option-provider="optionProvider"
+              />
+            </a-form-item>
+          </div>
+        </section>
+      </a-form>
+
+      <!-- 3. 底部插槽 -->
+      <slot name="footer" :submit="submitForm" :reset="resetForm"></slot>
+    </div>
   </div>
 </template>
 
@@ -162,47 +162,49 @@ defineExpose({ resetForm, submitForm })
   width: 100%;
   padding: 24px;
   background: #f7f9fb;
+  display: flex;
+  justify-content: center; /* 居中显示 */
+}
+.a-schema-form__container {
+  width: 100%;
+  max-width: 800px; /* 限制最大宽度，预留左右空间 */
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 .a-schema-form__header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 .a-schema-form__header h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 700;
 }
-.a-schema-form__eyebrow {
-  margin: 0;
-  font-size: 12px;
-  color: #6b7280;
-  text-transform: uppercase;
-}
 .a-schema-form__group {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
 .a-schema-form__group h3 {
-  padding-bottom: 8px;
-  margin-bottom: 16px;
-  font-size: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+  font-size: 18px;
   font-weight: 600;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #f0f0f0;
+  color: #1f2937;
 }
 .a-schema-form__grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
+  grid-template-columns: 1fr; /* 改为单列显示 */
+  gap: 8px 0;
 }
 .is-full {
-  grid-column: span 2;
+  grid-column: span 1;
 }
 @media (max-width: 640px) {
-  .a-schema-form__grid {
-    grid-template-columns: 1fr;
-  }
-  .is-full {
-    grid-column: span 1;
+  .a-schema-form__container {
+    padding: 20px;
   }
 }
 </style>

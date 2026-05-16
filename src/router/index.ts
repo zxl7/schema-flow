@@ -18,6 +18,14 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '动态表单业务服务'
     }
+  },
+  {
+    path: '/schema-editor',
+    name: 'SchemaEditor',
+    component: () => import('../examples/SchemaEditor/index.vue'),
+    meta: {
+      title: '表单设计器'
+    }
   }
 ]
 

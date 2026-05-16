@@ -19,10 +19,14 @@ export type ControlStyle =
   | 'searchInput'
   | 'editor'
   | 'checkbox'
+  | 'radio'
+  | 'checkboxGroup'
+  | 'rate'
+  | 'slider'
+  | 'time'
 
 /**
  * 原始约束协议
- * 定义字段的业务限制，如必填、长度、数据源等
  */
 export interface RawConstraint {
   key: string
@@ -32,7 +36,6 @@ export interface RawConstraint {
 
 /**
  * 字段选项结构
- * 统一 Select、TreeSelect 等组件的数据格式
  */
 export interface FieldOption {
   label: string
@@ -42,7 +45,6 @@ export interface FieldOption {
 
 /**
  * 远程数据源约束
- * 描述如何通过 URL 动态加载选项数据
  */
 export interface UrlConstraint {
   raw: string
@@ -54,7 +56,6 @@ export interface UrlConstraint {
 
 /**
  * 后端原始领域模型 (Domain Model)
- * 直接映射 demo.json 或接口下发的原始字段结构
  */
 export interface RawBusinessField {
   bid: string
@@ -74,13 +75,12 @@ export interface RawBusinessField {
 
 /**
  * 视图模型 (View Model)
- * 经过数据引擎归一化后的标准字段协议，UI 组件直接消费此结构
  */
 export interface BusinessField extends RawBusinessField {
   // 抽象出的 UI 类型，驱动动态组件分发
-  uiType: 'input' | 'select' | 'tree' | 'view'
+  uiType: 'input' | 'select' | 'tree' | 'view' | 'radio' | 'checkboxGroup' | 'rate' | 'slider'
   
-  // 组件属性包：直接解构传递给底层 UI 控件
+  // 组件属性包
   props: {
     placeholder?: string
     disabled: boolean
@@ -89,6 +89,9 @@ export interface BusinessField extends RawBusinessField {
     required: boolean
     allowClear?: boolean
     showSearch?: boolean
+    min?: number
+    max?: number
+    step?: number
     [key: string]: any
   }
 

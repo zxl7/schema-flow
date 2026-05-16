@@ -33,6 +33,16 @@
       />
     </template>
 
+    <template v-else-if="field.controlStyle === 'time'">
+      <a-time-picker
+        v-bind="$attrs"
+        :value="modelValue"
+        @update:value="onUpdate"
+        value-format="HH:mm:ss"
+        class="w-full"
+      />
+    </template>
+
     <template v-else-if="field.controlStyle === 'checkbox'">
       <a-switch
         v-bind="$attrs"

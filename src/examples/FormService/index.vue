@@ -29,6 +29,7 @@
               <h2>工序基础信息管理</h2>
             </div>
             <a-space>
+              <a-button @click="$router.push('/schema-editor')">打开表单设计器</a-button>
               <a-button @click="handleReset">重置</a-button>
               <a-button type="primary" @click="handleSubmit">提交</a-button>
             </a-space>

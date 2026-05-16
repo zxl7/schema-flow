@@ -107,6 +107,14 @@ export function normalizeField(
     uiType = 'select'
   } else if (raw.controlStyle === 'tree') {
     uiType = 'tree'
+  } else if (raw.controlStyle === 'radio') {
+    uiType = 'radio'
+  } else if (raw.controlStyle === 'checkboxGroup') {
+    uiType = 'checkboxGroup'
+  } else if (raw.controlStyle === 'rate') {
+    uiType = 'rate'
+  } else if (raw.controlStyle === 'slider') {
+    uiType = 'slider'
   }
 
   return { ...raw, uiType, props, logic }
@@ -128,10 +136,18 @@ function buildDefaultOptions(
     return String(constraints.enum.value).split('||').map(v => ({ label: v, value: v }))
   }
   if (constraints.dict_translate?.value) {
-    // 优先从外部传入的字典中匹配
     return dictionaries[String(constraints.dict_translate.value)] || []
   }
-  // 树形或用户数据，默认返回空，由具体组件负责异步加载
+  
+  // 模拟组模拟数据
+  if (raw.controlStyle === 'radio' || raw.controlStyle === 'checkboxGroup') {
+    return [
+      { label: '选项一', value: 'opt1' },
+      { label: '选项二', value: 'opt2' },
+      { label: '选项三', value: 'opt3' }
+    ]
+  }
+  
   return []
 }
 

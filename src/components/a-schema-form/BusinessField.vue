@@ -23,6 +23,10 @@ import FieldInput from './components/FieldInput.vue'
 import FieldSelect from './components/FieldSelect.vue'
 import FieldTree from './components/FieldTree.vue'
 import FieldView from './components/FieldView.vue'
+import FieldRadio from './components/FieldRadio.vue'
+import FieldCheckboxGroup from './components/FieldCheckboxGroup.vue'
+import FieldRate from './components/FieldRate.vue'
+import FieldSlider from './components/FieldSlider.vue'
 
 /**
  * 组件映射表：
@@ -32,7 +36,11 @@ const componentMap = {
   input: FieldInput,
   select: FieldSelect,
   tree: FieldTree,
-  view: FieldView
+  view: FieldView,
+  radio: FieldRadio,
+  checkboxGroup: FieldCheckboxGroup,
+  rate: FieldRate,
+  slider: FieldSlider
 }
 
 const props = defineProps<{
